@@ -19,6 +19,10 @@ func registerServe(root *cobra.Command) {
 			if err != nil {
 				return err
 			}
+			if err := ensureModules(proj.Root); err != nil {
+				return err
+			}
+
 			ui.Info("Serving %s", proj.Name)
 			ui.Step("GraphQL  %s", proj.API.GraphQL)
 			ui.Step("REST     %s", proj.API.REST)

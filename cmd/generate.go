@@ -32,6 +32,9 @@ func registerGenerate(root *cobra.Command) {
 			if err != nil {
 				return err
 			}
+			if err := ensureModules(proj.Root); err != nil {
+				return err
+			}
 			only, _ := cmd.Flags().GetStringSlice("only")
 			skip, _ := cmd.Flags().GetStringSlice("skip")
 			return runGenerate(proj, only, skip)
