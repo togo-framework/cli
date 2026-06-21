@@ -1,0 +1,45 @@
+# GoReleaser config for the togo CLI.
+# Release locally with `goreleaser release --clean` or via the release workflow.
+version: 2
+
+project_name: togo
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: togo
+    main: ./cmd/togo
+    binary: togo
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w
+      - -X github.com/togo-framework/cli/cmd.Version={{.Version}}
+      - -X github.com/togo-framework/cli/cmd.Commit={{.Commit}}
+      - -X github.com/togo-framework/cli/cmd.Date={{.Date}}
+
+archives:
+  # Matches the asset names install.sh / install.ps1 expect:
+  #   togo_linux_amd64.tar.gz, togo_windows_arm64.zip, …
+  - id: togo
+    name_template: "togo_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  use: github
+  sort: asc
+
+release:
+  github:
+    owner: togo-framework
+    name: cli

@@ -2,8 +2,28 @@
 
 The `togo` command — a Laravel-artisan-like CLI for the [togo](https://github.com/togo-framework/togo) framework.
 
+## Install
+
+**Linux / macOS**
 ```bash
-go install github.com/togo-framework/cli@latest
+curl -fsSL https://raw.githubusercontent.com/togo-framework/cli/main/install.sh | sh
+```
+
+**Windows (PowerShell)**
+```powershell
+irm https://raw.githubusercontent.com/togo-framework/cli/main/install.ps1 | iex
+```
+
+**With Go** (note the `/cmd/togo` path — it's what makes the binary `togo`):
+```bash
+go install github.com/togo-framework/cli/cmd/togo@latest
+```
+
+## Update
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/togo-framework/cli/main/update.sh | sh   # Linux/macOS
+irm https://raw.githubusercontent.com/togo-framework/cli/main/update.ps1 | iex        # Windows
 ```
 
 ## Commands
