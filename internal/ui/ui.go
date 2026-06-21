@@ -61,6 +61,19 @@ func Step(format string, a ...any) {
 	fmt.Fprintln(os.Stdout, paint(dim, "  "+fmt.Sprintf(format, a...)))
 }
 
+// Tag returns a colored, fixed-width process label like "[api]" / "[web]" for
+// prefixing concurrent service output.
+func Tag(name string) string {
+	code := cyan
+	switch name {
+	case "api", "backend":
+		code = green
+	case "web", "frontend":
+		code = blue
+	}
+	return paint(code+bold, fmt.Sprintf("[%-3s]", name))
+}
+
 // Label colorizes a short status tag like CREATE / SKIP / OVERWRITE.
 func Label(kind string) string {
 	switch kind {
