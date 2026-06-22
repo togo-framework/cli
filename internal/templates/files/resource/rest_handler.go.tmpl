@@ -89,6 +89,36 @@ func Register{{.Resource.Name}}Routes(api huma.API, a *app.App) {
 	})
 
 	huma.Register(api, huma.Operation{
+		OperationID: "update-{{kebab .Resource.Name}}", Method: http.MethodPut, Path: "/api/{{.Resource.Table}}/{id}",
+		Summary: "Update a {{.Resource.Name}}", Tags: []string{"{{.Resource.Name}}"},
+	}, func(ctx context.Context, in *struct {
+		ID   string `path:"id"`
+		Body struct {
+{{- range .Resource.Fields}}
+			{{pascal .Name}} {{if .Null}}*{{end}}{{.Go}} `json:"{{.Name}}"`
+{{- end}}
+		}
+	}) (*struct {
+		Body resources.{{.Resource.Name}}Response
+	}, error) {
+		if err := models.{{plural .Resource.Name}}(a).Where("id", "=", in.ID).Update(ctx, map[string]any{
+{{- range .Resource.Fields}}
+			"{{.Name}}": in.Body.{{pascal .Name}},
+{{- end}}
+		}); err != nil {
+			return nil, huma.Error500InternalServerError("update failed", err)
+		}
+		row, err := models.{{plural .Resource.Name}}(a).Find(ctx, in.ID)
+		if err != nil || row == nil {
+			return nil, huma.Error500InternalServerError("reload failed", err)
+		}
+		a.Emit(ctx, "{{snake .Resource.Name}}.updated", row)
+		return &struct {
+			Body resources.{{.Resource.Name}}Response
+		}{Body: resources.Transform{{.Resource.Name}}(*row)}, nil
+	})
+
+	huma.Register(api, huma.Operation{
 		OperationID: "delete-{{kebab .Resource.Name}}", Method: http.MethodDelete, Path: "/api/{{.Resource.Table}}/{id}",
 		DefaultStatus: http.StatusNoContent, Summary: "Delete a {{.Resource.Name}}", Tags: []string{"{{.Resource.Name}}"},
 	}, func(ctx context.Context, in *struct {
