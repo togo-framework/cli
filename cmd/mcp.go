@@ -13,7 +13,7 @@ import (
 )
 
 // mcpModule is the go-installable path of the togo MCP server.
-const mcpModule = "github.com/togo-framework/togo-mcp"
+const mcpModule = "github.com/togo-framework/mcp"
 
 func registerMCP(root *cobra.Command) {
 	serve := &cobra.Command{
