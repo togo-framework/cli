@@ -27,6 +27,9 @@ type pluginManifest struct {
 	Backend struct {
 		Package string `yaml:"package"`
 	} `yaml:"backend"`
+	Frontend struct {
+		Dir string `yaml:"dir"`
+	} `yaml:"frontend"`
 	Env []string `yaml:"env"`
 }
 
@@ -101,6 +104,17 @@ func installPlugin(proj *config.Project, repo string) error {
 		return err
 	}
 	recordPluginInConfig(proj, pkg)
+
+	// Inject the plugin's frontend (pages/components) into the app's web/.
+	webDir := "web"
+	if m, _ := fetchManifest(repo); m != nil && m.Frontend.Dir != "" {
+		webDir = m.Frontend.Dir
+	}
+	if n, err := injectFrontend(proj, module, webDir); err != nil {
+		ui.Warn("frontend injection skipped: %v", err)
+	} else if n > 0 {
+		ui.Step("injected %d frontend file(s) into %s/", n, proj.Frontend.Dir)
+	}
 
 	// Resolve the new dependency.
 	if err := goModTidy(proj.Root); err != nil {
@@ -208,6 +222,62 @@ func recordPluginInConfig(proj *config.Project, pkg string) {
 	if out, err := yaml.Marshal(doc); err == nil {
 		_ = os.WriteFile(path, out, 0o644)
 	}
+}
+
+// goModuleDir returns the local (module cache) directory of a required module.
+func goModuleDir(projRoot, module string) (string, error) {
+	c := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", module)
+	c.Dir = projRoot
+	c.Env = os.Environ()
+	out, err := c.Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// injectFrontend copies a plugin's web/ subtree (pages, components) into the
+// app's frontend dir so the plugin can serve UI (e.g. auth views).
+func injectFrontend(proj *config.Project, module, webSub string) (int, error) {
+	dir, err := goModuleDir(proj.Root, module)
+	if err != nil || dir == "" {
+		return 0, err
+	}
+	src := filepath.Join(dir, webSub)
+	if _, err := os.Stat(src); err != nil {
+		return 0, nil // plugin has no frontend
+	}
+	dest := filepath.Join(proj.Root, proj.Frontend.Dir)
+	count := 0
+	err = filepath.WalkDir(src, func(p string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			if name := d.Name(); name == "node_modules" || name == ".next" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		rel, err := filepath.Rel(src, p)
+		if err != nil {
+			return err
+		}
+		data, err := os.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(dest, rel)
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(target, data, 0o644); err != nil {
+			return err
+		}
+		count++
+		return nil
+	})
+	return count, err
 }
 
 func goGet(dir, mod string) error {
