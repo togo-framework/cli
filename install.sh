@@ -48,11 +48,16 @@ try_release() {
   TMP="$(mktemp -d)"
   curl -fsSL "$URL" -o "${TMP}/${ASSET}" || { rm -rf "$TMP"; return 1; }
   tar -xzf "${TMP}/${ASSET}" -C "$TMP" || { rm -rf "$TMP"; return 1; }
-  DEST="${TOGO_INSTALL_DIR:-/usr/local/bin}"
-  if [ -w "$DEST" ]; then mv "${TMP}/${BIN}" "${DEST}/${BIN}"; else sudo mv "${TMP}/${BIN}" "${DEST}/${BIN}"; fi
+  # Install OVER an existing togo (avoids two binaries shadowing each other);
+  # otherwise honor TOGO_INSTALL_DIR, else /usr/local/bin.
+  EXISTING="$(command -v "$BIN" 2>/dev/null || true)"
+  if [ -n "${TOGO_INSTALL_DIR:-}" ]; then DEST="$TOGO_INSTALL_DIR"
+  elif [ -n "$EXISTING" ]; then DEST="$(dirname "$EXISTING")"
+  else DEST="/usr/local/bin"; fi
+  if [ -w "$DEST" ]; then mv -f "${TMP}/${BIN}" "${DEST}/${BIN}"; else sudo mv -f "${TMP}/${BIN}" "${DEST}/${BIN}"; fi
   chmod +x "${DEST}/${BIN}" 2>/dev/null || true
   rm -rf "$TMP"
-  ok "Installed ${BIN} to ${DEST}/${BIN}"
+  ok "Installed ${BIN} ${TAG} to ${DEST}/${BIN}"
   return 0
 }
 
@@ -76,4 +81,15 @@ if try_release; then :; elif try_go; then :; else
   exit 1
 fi
 
-command -v "$BIN" >/dev/null 2>&1 && "$BIN" version || true
+# Refresh the shell's command cache and report what will actually run.
+hash -r 2>/dev/null || true
+ACTIVE="$(command -v "$BIN" 2>/dev/null || true)"
+if [ -n "$ACTIVE" ]; then
+  ok "$("$ACTIVE" version 2>/dev/null || echo "$BIN installed")"
+  info "active binary: ${ACTIVE}"
+  # Warn if another togo earlier on PATH would shadow the one we installed.
+  if [ -n "${DEST:-}" ] && [ "$(dirname "$ACTIVE")" != "$DEST" ]; then
+    err "another '${BIN}' at ${ACTIVE} shadows ${DEST}/${BIN} — remove it or fix PATH order"
+  fi
+  info "if 'togo version' still shows an old version, run:  hash -r   (or open a new shell)"
+fi
