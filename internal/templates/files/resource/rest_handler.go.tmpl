@@ -9,6 +9,7 @@ import (
 {{- end}}
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/togo-framework/validation"
 
 	"{{.Module}}/internal/app"
 	"{{.Module}}/internal/models"
@@ -63,12 +64,16 @@ func Register{{.Resource.Name}}Routes(api huma.API, a *app.App) {
 	}, func(ctx context.Context, in *struct {
 		Body struct {
 {{- range .Resource.Fields}}
-			{{pascal .Name}} {{if .Null}}*{{end}}{{.Go}} `json:"{{.Name}}"`
+			{{pascal .Name}} {{if .Null}}*{{end}}{{.Go}} `json:"{{.Name}}"{{if not .Null}} validate:"required"{{end}}`
 {{- end}}
 		}
 	}) (*struct {
 		Body resources.{{.Resource.Name}}Response
 	}, error) {
+		// Request validation layer (Laravel-style rules from `validate` tags).
+		if errs := validation.Validate(in.Body); errs.Any() {
+			return nil, huma.Error422UnprocessableEntity(errs.Error())
+		}
 		row, err := models.{{plural .Resource.Name}}(a).Create(ctx, map[string]any{
 {{- range .Resource.Fields}}
 			"{{.Name}}": in.Body.{{pascal .Name}},
