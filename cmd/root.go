@@ -70,6 +70,7 @@ func init() {
 
 	registerVersion(rootCmd)
 	registerUpgrade(rootCmd)
+	registerTest(rootCmd)
 	registerNew(rootCmd)
 	registerServe(rootCmd)
 	RegisterMake(rootCmd)
