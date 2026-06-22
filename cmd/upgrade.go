@@ -27,8 +27,22 @@ func registerUpgrade(root *cobra.Command) {
 			}
 			ui.Info("Upgrading togo CLI to %s…", version)
 
+			// Preferred path for "latest": the install script fetches the newest
+			// prebuilt release and installs it OVER the active binary (no Go needed,
+			// no shadowing). For a pinned version, fall through to `go install @version`.
+			if version == "latest" && has("curl") && has("sh") {
+				c := exec.Command("sh", "-c", "curl -fsSL https://raw.githubusercontent.com/togo-framework/cli/main/install.sh | sh")
+				c.Stdout, c.Stderr = os.Stdout, os.Stderr
+				c.Env = os.Environ()
+				if err := c.Run(); err == nil {
+					ui.Step("run `togo version` to confirm (use `hash -r` or a new shell if unchanged)")
+					return nil
+				}
+				ui.Warn("install script failed — falling back to go install")
+			}
+
 			if !goAvailable() {
-				ui.Warn("go not found — use the install script instead:")
+				ui.Warn("go not found — install manually:")
 				ui.Step("curl -fsSL https://raw.githubusercontent.com/togo-framework/cli/main/install.sh | sh")
 				return nil
 			}
