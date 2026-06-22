@@ -20,11 +20,14 @@ type Manifest struct {
 	path string `yaml:"-"`
 }
 
-// Resource is one generated entity and its fields.
+// Resource is one generated entity and its fields. Controller is set once a
+// controller (API) is generated for it, so registries only wire resources that
+// actually have handlers/resolvers.
 type Resource struct {
-	Name   string  `yaml:"name"`
-	Table  string  `yaml:"table"`
-	Fields []Field `yaml:"fields"`
+	Name       string  `yaml:"name"`
+	Table      string  `yaml:"table"`
+	Fields     []Field `yaml:"fields"`
+	Controller bool    `yaml:"controller,omitempty"`
 }
 
 // Field describes a single column across all generation targets.
@@ -80,6 +83,15 @@ func (m *Manifest) Upsert(r Resource, force bool) (existed bool, err error) {
 	m.Resources = append(m.Resources, r)
 	m.sort()
 	return false, nil
+}
+
+// SetController marks a resource as having a controller (API).
+func (m *Manifest) SetController(name string) bool {
+	if r := m.Find(name); r != nil {
+		r.Controller = true
+		return true
+	}
+	return false
 }
 
 func (m *Manifest) sort() {

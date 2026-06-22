@@ -12,6 +12,8 @@ github.com/togo-framework/create-togo-app v0.0.0-20260622015455-bc17db71dd0c h1:
 github.com/togo-framework/create-togo-app v0.0.0-20260622015455-bc17db71dd0c/go.mod h1:/5nUN9ZyR7df9pSS2pVQDyQcBkzRIbPlsYbJsiH6bI8=
 github.com/togo-framework/create-togo-app v0.0.0-20260622025331-54321af55eba h1:2aO+0NSuPmyEl4+fLIRoKRkHTkd81js6rNc7IcitxWE=
 github.com/togo-framework/create-togo-app v0.0.0-20260622025331-54321af55eba/go.mod h1:/5nUN9ZyR7df9pSS2pVQDyQcBkzRIbPlsYbJsiH6bI8=
+github.com/togo-framework/create-togo-app v0.0.0-20260622032229-ac7a5e654b19 h1:YCyDeQaUdWFKtBerVtBZyUf/TCt3eF/NIqyFSURJX4o=
+github.com/togo-framework/create-togo-app v0.0.0-20260622032229-ac7a5e654b19/go.mod h1:/5nUN9ZyR7df9pSS2pVQDyQcBkzRIbPlsYbJsiH6bI8=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405 h1:yhCVgyC4o1eVCa2tZl7eS0r+SDo693bJlVdllGtEeKM=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
 gopkg.in/yaml.v3 v3.0.1 h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=

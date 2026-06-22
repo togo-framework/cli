@@ -9,7 +9,7 @@ import (
 )
 
 func (r *queryResolver) {{.Resource.Name}}(ctx context.Context, id string) (*db.{{.Resource.Name}}, error) {
-	row, err := r.Q.Get{{.Resource.Name}}(ctx, id)
+	row, err := r.App.DB.Get{{.Resource.Name}}(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -17,7 +17,7 @@ func (r *queryResolver) {{.Resource.Name}}(ctx context.Context, id string) (*db.
 }
 
 func (r *queryResolver) {{plural .Resource.Name}}(ctx context.Context) ([]*db.{{.Resource.Name}}, error) {
-	rows, err := r.Q.List{{plural .Resource.Name}}(ctx, db.List{{plural .Resource.Name}}Params{Limit: 100, Offset: 0})
+	rows, err := r.App.DB.List{{plural .Resource.Name}}(ctx, db.List{{plural .Resource.Name}}Params{Limit: 100, Offset: 0})
 	if err != nil {
 		return nil, err
 	}
@@ -29,7 +29,7 @@ func (r *queryResolver) {{plural .Resource.Name}}(ctx context.Context) ([]*db.{{
 }
 
 func (r *mutationResolver) Create{{.Resource.Name}}(ctx context.Context, input graphgen.Create{{.Resource.Name}}Input) (*db.{{.Resource.Name}}, error) {
-	row, err := r.Q.Create{{.Resource.Name}}(ctx, db.Create{{.Resource.Name}}Params{
+	row, err := r.App.DB.Create{{.Resource.Name}}(ctx, db.Create{{.Resource.Name}}Params{
 {{- range .Resource.Fields}}
 		{{pascal .Name}}: input.{{pascal .Name}},
 {{- end}}
@@ -37,12 +37,14 @@ func (r *mutationResolver) Create{{.Resource.Name}}(ctx context.Context, input g
 	if err != nil {
 		return nil, err
 	}
+	_ = r.App.Hooks.Fire(ctx, "{{snake .Resource.Name}}.created", &row)
 	return &row, nil
 }
 
 func (r *mutationResolver) Delete{{.Resource.Name}}(ctx context.Context, id string) (bool, error) {
-	if err := r.Q.Delete{{.Resource.Name}}(ctx, id); err != nil {
+	if err := r.App.DB.Delete{{.Resource.Name}}(ctx, id); err != nil {
 		return false, err
 	}
+	_ = r.App.Hooks.Fire(ctx, "{{snake .Resource.Name}}.deleted", id)
 	return true, nil
 }

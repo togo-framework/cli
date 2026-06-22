@@ -7,23 +7,31 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
+	"{{.Module}}/internal/app"
 	db "{{.Module}}/internal/db/gen"
+	"{{.Module}}/internal/resources"
 )
 
 // Register{{.Resource.Name}}Routes mounts CRUD endpoints for {{.Resource.Table}}.
-func Register{{.Resource.Name}}Routes(api huma.API, q *db.Queries) {
+// Responses go through resources.Transform{{.Resource.Name}} (customize the shape there).
+// Lifecycle hooks ("{{snake .Resource.Name}}.created"/".deleted") fire on the kernel hook bus.
+func Register{{.Resource.Name}}Routes(api huma.API, a *app.App) {
 	huma.Register(api, huma.Operation{
 		OperationID: "list-{{kebab (plural .Resource.Name)}}", Method: http.MethodGet, Path: "/api/{{.Resource.Table}}",
 		Summary: "List {{plural .Resource.Name}}", Tags: []string{"{{.Resource.Name}}"},
 	}, func(ctx context.Context, in *struct {
 		Limit  int `query:"limit" default:"100"`
 		Offset int `query:"offset"`
-	}) (*struct{ Body []db.{{.Resource.Name}} }, error) {
-		rows, err := q.List{{plural .Resource.Name}}(ctx, db.List{{plural .Resource.Name}}Params{Limit: int32(in.Limit), Offset: int32(in.Offset)})
+	}) (*struct {
+		Body []resources.{{.Resource.Name}}Response
+	}, error) {
+		rows, err := a.DB.List{{plural .Resource.Name}}(ctx, db.List{{plural .Resource.Name}}Params{Limit: int32(in.Limit), Offset: int32(in.Offset)})
 		if err != nil {
 			return nil, huma.Error500InternalServerError("list failed", err)
 		}
-		return &struct{ Body []db.{{.Resource.Name}} }{Body: rows}, nil
+		return &struct {
+			Body []resources.{{.Resource.Name}}Response
+		}{Body: resources.Transform{{plural .Resource.Name}}(rows)}, nil
 	})
 
 	huma.Register(api, huma.Operation{
@@ -31,23 +39,32 @@ func Register{{.Resource.Name}}Routes(api huma.API, q *db.Queries) {
 		Summary: "Get a {{.Resource.Name}}", Tags: []string{"{{.Resource.Name}}"},
 	}, func(ctx context.Context, in *struct {
 		ID string `path:"id"`
-	}) (*struct{ Body db.{{.Resource.Name}} }, error) {
-		row, err := q.Get{{.Resource.Name}}(ctx, in.ID)
+	}) (*struct {
+		Body resources.{{.Resource.Name}}Response
+	}, error) {
+		row, err := a.DB.Get{{.Resource.Name}}(ctx, in.ID)
 		if err != nil {
 			return nil, huma.Error404NotFound("{{lower .Resource.Name}} not found")
 		}
-		return &struct{ Body db.{{.Resource.Name}} }{Body: row}, nil
+		return &struct {
+			Body resources.{{.Resource.Name}}Response
+		}{Body: resources.Transform{{.Resource.Name}}(row)}, nil
 	})
 
 	huma.Register(api, huma.Operation{
 		OperationID: "create-{{kebab .Resource.Name}}", Method: http.MethodPost, Path: "/api/{{.Resource.Table}}",
 		DefaultStatus: http.StatusCreated, Summary: "Create a {{.Resource.Name}}", Tags: []string{"{{.Resource.Name}}"},
-	}, func(ctx context.Context, in *struct{ Body db.Create{{.Resource.Name}}Params }) (*struct{ Body db.{{.Resource.Name}} }, error) {
-		row, err := q.Create{{.Resource.Name}}(ctx, in.Body)
+	}, func(ctx context.Context, in *struct{ Body db.Create{{.Resource.Name}}Params }) (*struct {
+		Body resources.{{.Resource.Name}}Response
+	}, error) {
+		row, err := a.DB.Create{{.Resource.Name}}(ctx, in.Body)
 		if err != nil {
 			return nil, huma.Error500InternalServerError("create failed", err)
 		}
-		return &struct{ Body db.{{.Resource.Name}} }{Body: row}, nil
+		_ = a.Hooks.Fire(ctx, "{{snake .Resource.Name}}.created", &row)
+		return &struct {
+			Body resources.{{.Resource.Name}}Response
+		}{Body: resources.Transform{{.Resource.Name}}(row)}, nil
 	})
 
 	huma.Register(api, huma.Operation{
@@ -56,9 +73,10 @@ func Register{{.Resource.Name}}Routes(api huma.API, q *db.Queries) {
 	}, func(ctx context.Context, in *struct {
 		ID string `path:"id"`
 	}) (*struct{}, error) {
-		if err := q.Delete{{.Resource.Name}}(ctx, in.ID); err != nil {
+		if err := a.DB.Delete{{.Resource.Name}}(ctx, in.ID); err != nil {
 			return nil, huma.Error500InternalServerError("delete failed", err)
 		}
+		_ = a.Hooks.Fire(ctx, "{{snake .Resource.Name}}.deleted", in.ID)
 		return &struct{}{}, nil
 	})
 }

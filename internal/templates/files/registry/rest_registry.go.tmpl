@@ -4,13 +4,13 @@ package rest
 import (
 	"github.com/danielgtaylor/huma/v2"
 
-	db "{{.Module}}/internal/db/gen"
+	"{{.Module}}/internal/app"
 )
 
 // RegisterRoutes mounts every generated resource's REST routes. Regenerated from
-// togo.resources.yaml on every `togo make:resource` / `togo generate`.
-func RegisterRoutes(api huma.API, q *db.Queries) {
-{{- range .Resources}}
-	Register{{.Name}}Routes(api, q)
-{{- end}}
+// togo.resources.yaml on every make:* / generate.
+func RegisterRoutes(api huma.API, a *app.App) {
+{{- range .Resources}}{{if .Controller}}
+	Register{{.Name}}Routes(api, a)
+{{- end}}{{end}}
 }
