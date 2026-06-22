@@ -5,7 +5,7 @@ go 1.26
 require (
 	github.com/gertd/go-pluralize v0.2.1
 	github.com/spf13/cobra v1.8.1
-	github.com/togo-framework/create-togo-app v0.0.0-20260622064936-8e8baf86bd1b
+	github.com/togo-framework/create-togo-app v0.0.0-20260622074606-ca611b098fda
 	gopkg.in/yaml.v3 v3.0.1
 )
 
