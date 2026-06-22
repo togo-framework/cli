@@ -2,7 +2,7 @@
 import useSWR from "swr";
 
 import { apiFetch } from "@/lib/api/client";
-import type { {{pascal .Resource.Name}} } from "@/lib/api/types";
+import type { {{pascal .Resource.Name}} } from "@/lib/api/{{snake .Resource.Name}}";
 
 export function use{{pascal (plural .Resource.Name)}}() {
   return useSWR<{{pascal .Resource.Name}}[]>("/{{.Resource.Table}}", apiFetch);

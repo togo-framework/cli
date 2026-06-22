@@ -31,10 +31,12 @@ var perResourceTargets = []target{
 	{"resource/queries.sql.tmpl", func(s, p string) string { return "internal/db/queries/" + s + ".sql" }, CreateOnly},
 	{"resource/table.hcl.tmpl", func(s, p string) string { return "db/atlas/schema/" + s + ".hcl" }, CreateOnly},
 	{"resource/type.graphqls.tmpl", func(s, p string) string { return "internal/graph/schema/" + s + ".graphqls" }, CreateOnly},
-	{"resource/resolver.go.tmpl", func(s, p string) string { return "internal/graph/resolvers/" + s + ".resolvers.go" }, CreateOnly},
+	// NOTE: GraphQL resolvers are owned by gqlgen (generated from the .graphqls
+	// fragment on `togo generate`), so we intentionally do not emit a resolver here.
 	{"resource/rest_handler.go.tmpl", func(s, p string) string { return "internal/rest/" + s + "_handler.go" }, CreateOnly},
 	{"resource/resource.go.tmpl", func(s, p string) string { return "internal/resources/" + s + ".go" }, CreateOnly},
 	{"resource/seeder.go.tmpl", func(s, p string) string { return "internal/db/seeders/" + s + "_seeder.go" }, CreateOnly},
+	{"resource/apitype.ts.tmpl", func(s, p string) string { return "web/lib/api/" + s + ".ts" }, CreateOnly},
 	{"resource/page.tsx.tmpl", func(s, p string) string { return "web/app/" + p + "/page.tsx" }, CreateOnly},
 	{"resource/hook.ts.tmpl", func(s, p string) string { return "web/lib/hooks/use" + Pascal(p) + ".ts" }, CreateOnly},
 }
@@ -53,7 +55,6 @@ var singleTargets = map[string]string{
 // aggregateTargets are the regenerated, Overwrite registries.
 var aggregateTargets = []target{
 	{"registry/rest_registry.go.tmpl", func(s, p string) string { return "internal/rest/registry.gen.go" }, Overwrite},
-	{"registry/graph_registry.go.tmpl", func(s, p string) string { return "internal/graph/resolvers/registry.gen.go" }, Overwrite},
 }
 
 // TableName returns the conventional table name (plural snake_case) for a model.

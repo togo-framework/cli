@@ -24,9 +24,22 @@ func FuncMap() template.FuncMap {
 		"singular": inflector.Singular,
 		"title":    strings.Title, //nolint:staticcheck // adequate for ASCII identifiers
 		"year":     func() int { return clockYear() },
-		"inc":      func(i int) int { return i + 1 },
-		"add":      func(a, b int) int { return a + b },
+		"inc":       func(i int) int { return i + 1 },
+		"add":       func(a, b int) int { return a + b },
 		"atlasType": atlasType,
+		"tsType":    tsType,
+	}
+}
+
+// tsType maps a Go type to its TypeScript equivalent for the frontend client.
+func tsType(goType string) string {
+	switch goType {
+	case "int", "int32", "int64", "float64":
+		return "number"
+	case "bool":
+		return "boolean"
+	default: // string, time.Time, uuid, etc.
+		return "string"
 	}
 }
 

@@ -48,9 +48,16 @@ func registerGenerate(root *cobra.Command) {
 func runGenerate(proj *config.Project, only, skip []string) error {
 	// Order is dictated by data flow; OpenAPI export compiles the whole program
 	// and therefore runs last.
+	// Tools run via `go run <pkg>@<version>` so nothing needs to be pre-installed.
+	// Every step is soft-fail: a missing tool or partial setup warns but never
+	// breaks the `togo generate && togo migrate && togo serve` chain.
 	steps := []genStep{
-		{name: "sqlc", bin: "sqlc", args: []string{"generate"}, skipMsg: "install: https://docs.sqlc.dev"},
-		{name: "gqlgen", bin: "go", args: []string{"run", "github.com/99designs/gqlgen", "generate"}},
+		// sqlc uses a CGO Postgres parser, so prefer the installed binary rather
+		// than compiling from source (brittle across toolchains).
+		{name: "sqlc", bin: "sqlc", args: []string{"generate"}, softFail: true, skipMsg: "install: brew install sqlc (or https://docs.sqlc.dev/en/latest/overview/install.html)"},
+		// No @version: resolves gqlgen from the project's go.mod so the CLI and the
+		// runtime it generates against are always the same version.
+		{name: "gqlgen", bin: "go", args: []string{"run", "github.com/99designs/gqlgen", "generate"}, softFail: true},
 		{name: "atlas", bin: "atlas", args: []string{"migrate", "diff", "--env", "local"}, softFail: true, skipMsg: "install: https://atlasgo.io"},
 		{name: "openapi", bin: "go", args: []string{"run", "./cmd/api", "openapi"}, softFail: true},
 	}
