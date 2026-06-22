@@ -41,6 +41,14 @@ func registerNew(root *cobra.Command) {
 			features := resolveFeatures(cmd)
 
 			opts := scaffold.Options{App: name, Module: module, Dir: dir, Force: force, DryRun: dry}
+			// Refuse to scaffold over a non-empty directory: overlaying onto leftover
+			// files (e.g. an incomplete `rm`) silently skips them and produces a broken
+			// mix of old + new code. --force overrides.
+			if !force && !dry {
+				if target := opts.Resolve().Dir; dirNotEmpty(target) {
+					return fmt.Errorf("directory %q already exists and is not empty — remove it (rm -rf %s) or use --force", target, target)
+				}
+			}
 			created, err := scaffold.New(opts)
 			if err != nil {
 				return err
@@ -129,6 +137,12 @@ func promptFeatures() []string {
 		return allFeatures
 	}
 	return parseFeatures(line)
+}
+
+// dirNotEmpty reports whether path exists and contains entries.
+func dirNotEmpty(path string) bool {
+	entries, err := os.ReadDir(path)
+	return err == nil && len(entries) > 0
 }
 
 // isInteractive reports whether stdin is a terminal (so prompting won't block CI).
