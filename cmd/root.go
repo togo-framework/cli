@@ -75,6 +75,7 @@ func init() {
 	registerServe(rootCmd)
 	registerQuality(rootCmd)
 	registerMakePlugin(rootCmd)
+	registerAgent(rootCmd)
 	RegisterMake(rootCmd)
 	registerGenerate(rootCmd)
 	registerDB(rootCmd)
