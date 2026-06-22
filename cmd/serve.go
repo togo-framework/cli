@@ -28,11 +28,13 @@ frontend, installing frontend dependencies on first run. Use --api-only or
 			webOnly, _ := cmd.Flags().GetBool("web-only")
 			addr, _ := cmd.Flags().GetString("addr")
 			webPort, _ := cmd.Flags().GetString("web-port")
-			return runDev(proj, devOptions{apiOnly: apiOnly, webOnly: webOnly, addr: addr, webPort: webPort})
+			noWatch, _ := cmd.Flags().GetBool("no-watch")
+			return runDev(proj, devOptions{apiOnly: apiOnly, webOnly: webOnly, addr: addr, webPort: webPort, watch: !noWatch})
 		},
 	}
 	cmd.Flags().Bool("api-only", false, "run only the Go API")
 	cmd.Flags().Bool("web-only", false, "run only the Next.js frontend")
+	cmd.Flags().Bool("no-watch", false, "disable the file watcher (no auto-restart)")
 	cmd.Flags().String("addr", ":8080", "API listen address")
 	cmd.Flags().String("web-port", "3000", "frontend dev server port")
 	root.AddCommand(cmd)
@@ -58,6 +60,7 @@ frontend, installing frontend dependencies on first run. Use --api-only or
 type devOptions struct {
 	apiOnly bool
 	webOnly bool
+	watch   bool
 	addr    string
 	webPort string
 }
@@ -120,6 +123,25 @@ func runDev(proj *config.Project, opts devOptions) error {
 	}
 
 	printBanner(proj, opts, services)
+
+	// Watch mode (default): restart the API on .go changes; web hot-reloads itself.
+	if opts.watch && !opts.apiOnly {
+		var api *service
+		var web *service
+		for i := range services {
+			if services[i].name == "api" {
+				api = &services[i]
+			} else if services[i].name == "web" {
+				web = &services[i]
+			}
+		}
+		if api != nil {
+			return watchAndServe(proj.Root, *api, web)
+		}
+	}
+	if opts.watch && opts.apiOnly && len(services) == 1 {
+		return watchAndServe(proj.Root, services[0], nil)
+	}
 	return runServices(services)
 }
 
