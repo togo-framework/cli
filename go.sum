@@ -20,6 +20,8 @@ github.com/togo-framework/create-togo-app v0.0.0-20260622084757-4e28d4c3a041 h1:
 github.com/togo-framework/create-togo-app v0.0.0-20260622084757-4e28d4c3a041/go.mod h1:/5nUN9ZyR7df9pSS2pVQDyQcBkzRIbPlsYbJsiH6bI8=
 github.com/togo-framework/create-togo-app v0.0.0-20260622090708-db06ee23e671 h1:/IX5ayPhBoDvxZ6qi+iGwuQ2BiJQ6r9JCKiktueyKB0=
 github.com/togo-framework/create-togo-app v0.0.0-20260622090708-db06ee23e671/go.mod h1:/5nUN9ZyR7df9pSS2pVQDyQcBkzRIbPlsYbJsiH6bI8=
+github.com/togo-framework/create-togo-app v0.0.0-20260622093209-1aa3dd592b87 h1:SZx9T8JdNKOGCNB+txeF014/nmC2mxpc6AKZaNiZdYs=
+github.com/togo-framework/create-togo-app v0.0.0-20260622093209-1aa3dd592b87/go.mod h1:/5nUN9ZyR7df9pSS2pVQDyQcBkzRIbPlsYbJsiH6bI8=
 golang.org/x/sys v0.46.0 h1:noSf2Fq6F8DBgS+LysIkx7rIExoNHJsxOAtPp4rthXw=
 golang.org/x/sys v0.46.0/go.mod h1:4GL1E5IUh+htKOUEOaiffhrAeqysfVGipDYzABqnCmw=
 golang.org/x/term v0.44.0 h1:0rLvDRCtNj0gZkyIXhCyOb2OAzEhLVqc4B+hrsBhrmc=
