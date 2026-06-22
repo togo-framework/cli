@@ -12,32 +12,34 @@ import (
 )
 
 func registerServe(root *cobra.Command) {
+	// serve — production-style run (no watcher by default); also used by deploy.
 	cmd := &cobra.Command{
 		Use:     "serve",
-		Short:   "Run the app — backend (GraphQL + REST/OpenAPI) and frontend together",
+		Short:   "Serve the app (backend + frontend) — production-style; used by deploy",
 		GroupID: groupProject,
-		Long: `Run the togo app. By default this starts BOTH the Go API and the Next.js
-frontend, installing frontend dependencies on first run. Use --api-only or
---web-only to run just one.`,
+		Long: `Serve the togo app. Runs the Go API and the Next.js frontend (use --api-only
+/ --web-only for one). Set --host and --port for the API; --web-port for the
+frontend. For local development with hot reload, use 'togo dev'.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			proj, err := loadProject(cmd)
-			if err != nil {
-				return err
-			}
-			apiOnly, _ := cmd.Flags().GetBool("api-only")
-			webOnly, _ := cmd.Flags().GetBool("web-only")
-			addr, _ := cmd.Flags().GetString("addr")
-			webPort, _ := cmd.Flags().GetString("web-port")
-			noWatch, _ := cmd.Flags().GetBool("no-watch")
-			return runDev(proj, devOptions{apiOnly: apiOnly, webOnly: webOnly, addr: addr, webPort: webPort, watch: !noWatch})
+			return serveFromFlags(cmd, false)
 		},
 	}
-	cmd.Flags().Bool("api-only", false, "run only the Go API")
-	cmd.Flags().Bool("web-only", false, "run only the Next.js frontend")
-	cmd.Flags().Bool("no-watch", false, "disable the file watcher (no auto-restart)")
-	cmd.Flags().String("addr", ":8080", "API listen address")
-	cmd.Flags().String("web-port", "3000", "frontend dev server port")
+	addServeFlags(cmd)
+	cmd.Flags().Bool("watch", false, "rebuild/restart the API on file changes")
 	root.AddCommand(cmd)
+
+	// dev — composer-dev style: all services, hot reload, colored prefixed logs.
+	dev := &cobra.Command{
+		Use:     "dev",
+		Short:   "Run all services in dev mode (hot reload, colored per-service logs)",
+		GroupID: groupProject,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ui.Info("dev mode — all services, hot reload, Ctrl-C to stop")
+			return serveFromFlags(cmd, true)
+		},
+	}
+	addServeFlags(dev)
+	root.AddCommand(dev)
 
 	// `togo web` — frontend only (convenience alias for serve --web-only).
 	web := &cobra.Command{
@@ -57,11 +59,43 @@ frontend, installing frontend dependencies on first run. Use --api-only or
 	root.AddCommand(web)
 }
 
+// addServeFlags adds the shared host/port/scope flags to serve and dev.
+func addServeFlags(cmd *cobra.Command) {
+	cmd.Flags().Bool("api-only", false, "run only the Go API")
+	cmd.Flags().Bool("web-only", false, "run only the Next.js frontend")
+	cmd.Flags().String("host", "", "host/interface to bind (default all interfaces)")
+	cmd.Flags().String("port", "8080", "API port")
+	cmd.Flags().String("web-port", "3000", "frontend dev server port")
+}
+
+// serveFromFlags builds devOptions from flags and runs. watch defaults from the
+// command (dev=on, serve=off unless --watch).
+func serveFromFlags(cmd *cobra.Command, devDefault bool) error {
+	proj, err := loadProject(cmd)
+	if err != nil {
+		return err
+	}
+	apiOnly, _ := cmd.Flags().GetBool("api-only")
+	webOnly, _ := cmd.Flags().GetBool("web-only")
+	host, _ := cmd.Flags().GetString("host")
+	port, _ := cmd.Flags().GetString("port")
+	webPort, _ := cmd.Flags().GetString("web-port")
+	watch := devDefault
+	if cmd.Flags().Changed("watch") {
+		watch, _ = cmd.Flags().GetBool("watch")
+	}
+	return runDev(proj, devOptions{
+		apiOnly: apiOnly, webOnly: webOnly, watch: watch,
+		addr: host + ":" + port, host: host, webPort: webPort,
+	})
+}
+
 type devOptions struct {
 	apiOnly bool
 	webOnly bool
 	watch   bool
 	addr    string
+	host    string
 	webPort string
 }
 
