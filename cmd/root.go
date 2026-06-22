@@ -73,6 +73,7 @@ func init() {
 	registerTest(rootCmd)
 	registerNew(rootCmd)
 	registerServe(rootCmd)
+	registerQuality(rootCmd)
 	RegisterMake(rootCmd)
 	registerGenerate(rootCmd)
 	registerDB(rootCmd)
