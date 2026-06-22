@@ -69,14 +69,19 @@ func registerNew(root *cobra.Command) {
 				}
 			}
 
-			// Install full plugins (auth backend + dashboard UI/layouts) so the app
-			// ships login/register/dashboard/admin out of the box.
+			// Install full plugins (auth backend + dev login + dashboard UI/layouts)
+			// so the app ships login/register/dashboard/admin out of the box.
 			if proj, err := config.Load(filepath.Join(target, "togo.yaml")); err == nil {
-				for _, p := range []string{"auth", "dashboard"} {
-					if contains(selected, p) {
-						if err := installPlugin(proj, "togo-framework/"+p); err != nil {
-							ui.Warn("install %s: %v", p, err)
-						}
+				var installs []string
+				if contains(selected, "auth") {
+					installs = append(installs, "auth", "auth-dev") // auth-dev is dev-only (no-op in prod)
+				}
+				if contains(selected, "dashboard") {
+					installs = append(installs, "dashboard")
+				}
+				for _, p := range installs {
+					if err := installPlugin(proj, "togo-framework/"+p); err != nil {
+						ui.Warn("install %s: %v", p, err)
 					}
 				}
 			}
