@@ -108,6 +108,12 @@ func runDev(proj *config.Project, opts devOptions) error {
 	}
 	apiOrigin := "http://localhost" + opts.addr
 
+	// Optionally bring up the local Supabase stack (SUPABASE_LOCAL=cli|compose).
+	if mode := os.Getenv("SUPABASE_LOCAL"); mode != "" && mode != "false" {
+		ui.Step("starting Supabase stack (SUPABASE_LOCAL=%s)…", mode)
+		_ = supabaseRun("start", []string{"compose", "up", "-d"})
+	}
+
 	var services []service
 
 	// Backend
