@@ -1,0 +1,55 @@
+# togo infra — Google Cloud Run deployment for {{.App}}.
+terraform {
+  required_providers {
+    google = {
+      source  = "hashicorp/google"
+      version = "~> 6.0"
+    }
+  }
+}
+
+variable "project" {
+  type        = string
+  description = "GCP project ID"
+}
+
+variable "region" {
+  type    = string
+  default = "{{.Region}}"
+}
+
+variable "image" {
+  type        = string
+  description = "Container image, e.g. REGION-docker.pkg.dev/PROJECT/togo/{{.App}}:latest"
+}
+
+provider "google" {
+  project = var.project
+  region  = var.region
+}
+
+resource "google_cloud_run_v2_service" "app" {
+  name                = "{{.App}}"
+  location            = var.region
+  deletion_protection = false
+
+  template {
+    containers {
+      image = var.image
+      ports {
+        container_port = 8080
+      }
+    }
+  }
+}
+
+resource "google_cloud_run_v2_service_iam_member" "public" {
+  name     = google_cloud_run_v2_service.app.name
+  location = var.region
+  role     = "roles/run.invoker"
+  member   = "allUsers"
+}
+
+output "url" {
+  value = google_cloud_run_v2_service.app.uri
+}

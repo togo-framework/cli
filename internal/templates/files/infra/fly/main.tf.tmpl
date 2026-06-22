@@ -1,0 +1,43 @@
+# togo infra — Fly.io deployment for {{.App}}.
+terraform {
+  required_providers {
+    fly = {
+      source  = "fly-apps/fly"
+      version = "~> 0.0.23"
+    }
+  }
+}
+
+variable "fly_api_token" {
+  type      = string
+  sensitive = true
+}
+
+variable "image" {
+  type        = string
+  description = "Container image to deploy"
+}
+
+provider "fly" {
+  fly_api_token = var.fly_api_token
+}
+
+resource "fly_app" "app" {
+  name = "{{.App}}"
+  org  = "personal"
+}
+
+resource "fly_machine" "app" {
+  app    = fly_app.app.name
+  region = "{{.Region}}"
+  name   = "{{.App}}"
+  image  = var.image
+  services = [{
+    ports = [{
+      port     = 443
+      handlers = ["tls", "http"]
+    }]
+    protocol      = "tcp"
+    internal_port = 8080
+  }]
+}

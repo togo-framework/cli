@@ -1,0 +1,15 @@
+# Infrastructure ({{.Provider}})
+
+Terraform for deploying **{{.App}}** to {{.Provider}}, scaffolded by `togo infra:init`.
+
+```bash
+# 1. Build & push the container image (see ../Dockerfile)
+docker build -t {{.App}}:latest ..
+
+# 2. Provision + deploy
+togo infra:plan      # terraform plan
+togo deploy          # terraform apply
+```
+
+Set provider credentials via environment/variables before applying. State stays
+in this directory (or a separate infra repo) — keep it out of the app repo.
