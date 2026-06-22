@@ -1,6 +1,9 @@
 package cmd
 
 import (
+	"bufio"
+	"fmt"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -81,11 +84,25 @@ func registerNew(root *cobra.Command) {
 	root.AddCommand(cmd)
 }
 
-// resolveFeatures returns the selected features from --features, or all by default.
+// resolveFeatures returns the selected features. Precedence: explicit --features
+// flag → interactive prompt (when attached to a terminal) → all (default, e.g. CI).
 func resolveFeatures(cmd *cobra.Command) []string {
-	raw, _ := cmd.Flags().GetString("features")
+	if cmd.Flags().Changed("features") {
+		raw, _ := cmd.Flags().GetString("features")
+		return parseFeatures(raw)
+	}
+	if isInteractive() {
+		return promptFeatures()
+	}
+	return allFeatures
+}
+
+func parseFeatures(raw string) []string {
 	if strings.TrimSpace(raw) == "" || raw == "all" {
 		return allFeatures
+	}
+	if strings.TrimSpace(raw) == "none" {
+		return nil
 	}
 	var out []string
 	for _, f := range strings.Split(raw, ",") {
@@ -95,4 +112,27 @@ func resolveFeatures(cmd *cobra.Command) []string {
 		}
 	}
 	return out
+}
+
+// promptFeatures asks which feature plugins to include (Enter = all).
+func promptFeatures() []string {
+	ui.Info("Which feature plugins do you want? (each is a togo-framework provider)")
+	ui.Step("available: %s", strings.Join(allFeatures, ", "))
+	ui.Step("comma-separated list, 'none', or Enter for all")
+	fmt.Print("  features [all]: ")
+	sc := bufio.NewScanner(os.Stdin)
+	if !sc.Scan() {
+		return allFeatures
+	}
+	line := strings.TrimSpace(sc.Text())
+	if line == "" {
+		return allFeatures
+	}
+	return parseFeatures(line)
+}
+
+// isInteractive reports whether stdin is a terminal (so prompting won't block CI).
+func isInteractive() bool {
+	fi, err := os.Stdin.Stat()
+	return err == nil && (fi.Mode()&os.ModeCharDevice) != 0
 }

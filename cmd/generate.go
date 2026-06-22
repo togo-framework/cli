@@ -25,22 +25,24 @@ func registerGenerate(root *cobra.Command) {
 	cmd := &cobra.Command{
 		Use:     "generate",
 		Aliases: []string{"gen"},
-		Short:   "Run the codegen pipeline: sqlc → gqlgen → atlas diff → OpenAPI export",
+		Short:   "Run the codegen pipeline: sqlc → gqlgen → OpenAPI export",
 		GroupID: groupCodegen,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			proj, err := loadProject(cmd)
 			if err != nil {
 				return err
 			}
-			if err := ensureModules(proj.Root); err != nil {
-				return err
+			// Always tidy: make:resource introduces imports (orm, validation,
+			// faker) that the gqlgen/openapi compile steps must resolve.
+			if err := goModTidy(proj.Root); err != nil {
+				ui.Warn("go mod tidy failed: %v", err)
 			}
 			only, _ := cmd.Flags().GetStringSlice("only")
 			skip, _ := cmd.Flags().GetStringSlice("skip")
 			return runGenerate(proj, only, skip)
 		},
 	}
-	cmd.Flags().StringSlice("only", nil, "run only these steps (sqlc,gqlgen,atlas,openapi)")
+	cmd.Flags().StringSlice("only", nil, "run only these steps (sqlc,gqlgen,openapi)")
 	cmd.Flags().StringSlice("skip", nil, "skip these steps")
 	root.AddCommand(cmd)
 }
@@ -58,7 +60,9 @@ func runGenerate(proj *config.Project, only, skip []string) error {
 		// No @version: resolves gqlgen from the project's go.mod so the CLI and the
 		// runtime it generates against are always the same version.
 		{name: "gqlgen", bin: "go", args: []string{"run", "github.com/99designs/gqlgen", "generate"}, softFail: true},
-		{name: "atlas", bin: "atlas", args: []string{"migrate", "diff", "--env", "local"}, softFail: true, skipMsg: "install: https://atlasgo.io"},
+		// Migrations apply via `togo migrate` (driver-agnostic, applies the schema
+		// files directly — no Atlas/dev-url needed). Atlas is optional/advanced and
+		// available via `togo migrate:diff`, so it is NOT in the default pipeline.
 		{name: "openapi", bin: "go", args: []string{"run", "./cmd/api", "openapi"}, softFail: true},
 	}
 
