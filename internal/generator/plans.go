@@ -24,18 +24,18 @@ type target struct {
 	mode OpMode
 }
 
-// perResourceTargets are the template-owned, CreateOnly fragments.
+// perResourceTargets are the template-owned, CreateOnly fragments. Models come
+// from sqlc (db.<Name>), so there is no hand-written model file.
 var perResourceTargets = []target{
-	{"resource/model.go.tmpl", func(s, p string) string { return "internal/models/" + s + ".go" }, CreateOnly},
 	{"resource/schema.sql.tmpl", func(s, p string) string { return "internal/db/schema/" + s + ".sql" }, CreateOnly},
 	{"resource/queries.sql.tmpl", func(s, p string) string { return "internal/db/queries/" + s + ".sql" }, CreateOnly},
 	{"resource/table.hcl.tmpl", func(s, p string) string { return "db/atlas/schema/" + s + ".hcl" }, CreateOnly},
 	{"resource/type.graphqls.tmpl", func(s, p string) string { return "internal/graph/schema/" + s + ".graphqls" }, CreateOnly},
-	// NOTE: GraphQL resolvers are owned by gqlgen (generated from the .graphqls
-	// fragment on `togo generate`), so we intentionally do not emit a resolver here.
+	{"resource/resolver.go.tmpl", func(s, p string) string { return "internal/graph/resolvers/" + s + ".resolver.go" }, CreateOnly},
 	{"resource/rest_handler.go.tmpl", func(s, p string) string { return "internal/rest/" + s + "_handler.go" }, CreateOnly},
 	{"resource/resource.go.tmpl", func(s, p string) string { return "internal/resources/" + s + ".go" }, CreateOnly},
 	{"resource/seeder.go.tmpl", func(s, p string) string { return "internal/db/seeders/" + s + "_seeder.go" }, CreateOnly},
+	{"resource/test.go.tmpl", func(s, p string) string { return "internal/rest/" + s + "_test.go" }, CreateOnly},
 	{"resource/apitype.ts.tmpl", func(s, p string) string { return "web/lib/api/" + s + ".ts" }, CreateOnly},
 	{"resource/page.tsx.tmpl", func(s, p string) string { return "web/app/" + p + "/page.tsx" }, CreateOnly},
 	{"resource/hook.ts.tmpl", func(s, p string) string { return "web/lib/hooks/use" + Pascal(p) + ".ts" }, CreateOnly},
@@ -43,7 +43,6 @@ var perResourceTargets = []target{
 
 // singleTargets maps a make:<kind> verb to one perResourceTargets entry.
 var singleTargets = map[string]string{
-	"make:model":     "resource/model.go.tmpl",
 	"make:query":     "resource/queries.sql.tmpl",
 	"make:migration": "resource/table.hcl.tmpl",
 	"make:graphql":   "resource/type.graphqls.tmpl",
@@ -55,6 +54,7 @@ var singleTargets = map[string]string{
 // aggregateTargets are the regenerated, Overwrite registries.
 var aggregateTargets = []target{
 	{"registry/rest_registry.go.tmpl", func(s, p string) string { return "internal/rest/registry.gen.go" }, Overwrite},
+	{"registry/seeder_registry.go.tmpl", func(s, p string) string { return "internal/db/seeders/registry.gen.go" }, Overwrite},
 }
 
 // TableName returns the conventional table name (plural snake_case) for a model.

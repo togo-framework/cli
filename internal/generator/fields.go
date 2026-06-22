@@ -74,6 +74,30 @@ func ParseFields(args []string) ([]config.Field, error) {
 	return fields, nil
 }
 
+// SampleValue returns a Go literal for seeding a field. Nullable fields seed to
+// nil; otherwise a type-appropriate placeholder.
+func SampleValue(f config.Field) string {
+	if f.Null {
+		return "nil"
+	}
+	switch {
+	case f.PG == "uuid":
+		return `"00000000-0000-0000-0000-000000000000"`
+	case f.Go == "string":
+		return fmt.Sprintf("%q", "sample "+f.Name)
+	case f.Go == "int64" || f.Go == "int32":
+		return "1"
+	case f.Go == "bool":
+		return "true"
+	case f.Go == "float64":
+		return "1"
+	case f.Go == "time.Time":
+		return "time.Now()"
+	default:
+		return `""`
+	}
+}
+
 // NeedsTimeImport reports whether any field uses time.Time, so the model
 // template can conditionally import the time package.
 func NeedsTimeImport(fields []config.Field) bool {

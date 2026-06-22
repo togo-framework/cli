@@ -4,8 +4,8 @@ type {{.Resource.Name}} {
 {{- range .Resource.Fields}}
   {{camel .Name}}: {{.GQL}}
 {{- end}}
-  createdAt: String!
-  updatedAt: String!
+  createdAt: Time!
+  updatedAt: Time!
 }
 
 input Create{{.Resource.Name}}Input {

@@ -28,6 +28,7 @@ func FuncMap() template.FuncMap {
 		"add":       func(a, b int) int { return a + b },
 		"atlasType": atlasType,
 		"tsType":    tsType,
+		"sample":    SampleValue,
 	}
 }
 
