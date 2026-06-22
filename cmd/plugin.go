@@ -2,14 +2,33 @@ package cmd
 
 import (
 	"fmt"
+	"go/format"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 
+	"github.com/togo-framework/cli/internal/config"
 	"github.com/togo-framework/cli/internal/ui"
 )
+
+// pluginsFile is the generated blank-import file that drives kernel auto-discovery.
+const pluginsFile = "internal/plugins/plugins.gen.go"
+
+// pluginManifest mirrors the fields of a plugin's togo.plugin.yaml we care about.
+type pluginManifest struct {
+	Name    string `yaml:"name"`
+	Backend struct {
+		Package string `yaml:"package"`
+	} `yaml:"backend"`
+	Env []string `yaml:"env"`
+}
 
 func registerPlugin(root *cobra.Command) {
 	install := &cobra.Command{
@@ -22,29 +41,7 @@ func registerPlugin(root *cobra.Command) {
 			if err != nil {
 				return err
 			}
-			repo := args[0]
-			if strings.Count(repo, "/") < 1 {
-				return fmt.Errorf("expected owner/repo (e.g. fadymondy/cms), got %q", repo)
-			}
-			module := "github.com/" + repo
-			ui.Info("Installing plugin %s", repo)
-
-			if _, err := exec.LookPath("go"); err == nil {
-				c := exec.Command("go", "get", module+"@latest")
-				c.Dir = proj.Root
-				c.Stdout, c.Stderr = os.Stdout, os.Stderr
-				c.Env = os.Environ()
-				if err := c.Run(); err != nil {
-					return fmt.Errorf("go get %s: %w", module, err)
-				}
-			} else {
-				ui.Warn("go not found — skipped `go get %s`", module)
-			}
-
-			ui.Success("Fetched %s", module)
-			ui.Step("register it in your kernel and run `togo generate` to wire routes/migrations")
-			ui.Step("(plugin auto-discovery lands in the framework kernel phase)")
-			return nil
+			return installPlugin(proj, args[0])
 		},
 	}
 
@@ -57,11 +54,12 @@ func registerPlugin(root *cobra.Command) {
 			if err != nil {
 				return err
 			}
-			if len(proj.Plugins) == 0 {
+			pkgs := readPluginImports(proj.Root)
+			if len(pkgs) == 0 {
 				ui.Info("No plugins installed")
 				return nil
 			}
-			for _, p := range proj.Plugins {
+			for _, p := range pkgs {
 				ui.Step("• %s", p)
 			}
 			return nil
@@ -69,4 +67,160 @@ func registerPlugin(root *cobra.Command) {
 	}
 
 	root.AddCommand(install, list)
+}
+
+func installPlugin(proj *config.Project, repo string) error {
+	repo = strings.TrimPrefix(strings.TrimSuffix(repo, "/"), "github.com/")
+	if strings.Count(repo, "/") < 1 {
+		return fmt.Errorf("expected owner/repo (e.g. fadymondy/cms), got %q", repo)
+	}
+	module := "github.com/" + repo
+	ui.Info("Installing plugin %s", repo)
+
+	// Resolve the backend import package from the plugin's manifest (best-effort).
+	pkg := module
+	if m, err := fetchManifest(repo); err == nil {
+		if m.Backend.Package != "" {
+			pkg = m.Backend.Package
+		}
+		if len(m.Env) > 0 {
+			ui.Step("env required: %s", strings.Join(m.Env, ", "))
+		}
+		ui.Step("manifest: %s", m.Name)
+	} else {
+		ui.Warn("no togo.plugin.yaml found upstream; assuming package %s", module)
+	}
+
+	// Fetch the module.
+	if err := goGet(proj.Root, module+"@latest"); err != nil {
+		return err
+	}
+
+	// Register for auto-discovery + record in togo.yaml.
+	if err := addPluginImport(proj.Root, pkg); err != nil {
+		return err
+	}
+	recordPluginInConfig(proj, pkg)
+
+	// Resolve the new dependency.
+	if err := goModTidy(proj.Root); err != nil {
+		ui.Warn("go mod tidy failed: %v (run it manually)", err)
+	}
+
+	ui.Success("Installed %s", pkg)
+	ui.Step("it auto-registers with the kernel on next `togo serve`")
+	return nil
+}
+
+// fetchManifest tries main then master for togo.plugin.yaml.
+func fetchManifest(repo string) (*pluginManifest, error) {
+	for _, branch := range []string{"main", "master"} {
+		url := fmt.Sprintf("https://raw.githubusercontent.com/%s/%s/togo.plugin.yaml", repo, branch)
+		resp, err := http.Get(url)
+		if err != nil {
+			continue
+		}
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			continue
+		}
+		var m pluginManifest
+		if err := yaml.Unmarshal(body, &m); err != nil {
+			return nil, err
+		}
+		return &m, nil
+	}
+	return nil, fmt.Errorf("manifest not found")
+}
+
+// readPluginImports parses the blank-import package paths from plugins.gen.go.
+func readPluginImports(root string) []string {
+	data, err := os.ReadFile(filepath.Join(root, pluginsFile))
+	if err != nil {
+		return nil
+	}
+	var pkgs []string
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "_ \"") {
+			pkgs = append(pkgs, strings.TrimSuffix(strings.TrimPrefix(line, "_ \""), "\""))
+		}
+	}
+	return pkgs
+}
+
+// addPluginImport adds pkg to the set of installed plugins and rewrites plugins.gen.go.
+func addPluginImport(root, pkg string) error {
+	set := map[string]bool{}
+	for _, p := range readPluginImports(root) {
+		set[p] = true
+	}
+	set[pkg] = true
+	pkgs := make([]string, 0, len(set))
+	for p := range set {
+		pkgs = append(pkgs, p)
+	}
+	sort.Strings(pkgs)
+
+	var b strings.Builder
+	b.WriteString("// Code generated by togo. DO NOT EDIT.\n//\n")
+	b.WriteString("// Installed plugins are blank-imported here so their init() registers them\n")
+	b.WriteString("// with the kernel for auto-discovery. Managed by `togo install`.\n")
+	b.WriteString("package plugins\n")
+	if len(pkgs) > 0 {
+		b.WriteString("\nimport (\n")
+		for _, p := range pkgs {
+			fmt.Fprintf(&b, "\t_ %q\n", p)
+		}
+		b.WriteString(")\n")
+	}
+	out, err := format.Source([]byte(b.String()))
+	if err != nil {
+		return err
+	}
+	dest := filepath.Join(root, pluginsFile)
+	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(dest, out, 0o644)
+}
+
+// recordPluginInConfig appends the plugin to togo.yaml's plugins list (best-effort,
+// for human visibility — plugins.gen.go is the source of truth).
+func recordPluginInConfig(proj *config.Project, pkg string) {
+	path := filepath.Join(proj.Root, config.ConfigFile)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	var doc map[string]any
+	if yaml.Unmarshal(data, &doc) != nil {
+		return
+	}
+	existing, _ := doc["plugins"].([]any)
+	for _, e := range existing {
+		if s, ok := e.(string); ok && s == pkg {
+			return
+		}
+	}
+	doc["plugins"] = append(existing, pkg)
+	if out, err := yaml.Marshal(doc); err == nil {
+		_ = os.WriteFile(path, out, 0o644)
+	}
+}
+
+func goGet(dir, mod string) error {
+	if !goAvailable() {
+		ui.Warn("go not found — skipped `go get %s`", mod)
+		return nil
+	}
+	c := exec.Command("go", "get", mod)
+	c.Dir = dir
+	c.Stdout, c.Stderr = os.Stdout, os.Stderr
+	c.Env = os.Environ()
+	if err := c.Run(); err != nil {
+		return fmt.Errorf("go get %s: %w", mod, err)
+	}
+	return nil
 }
