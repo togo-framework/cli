@@ -29,7 +29,7 @@ type target struct {
 var modelTargets = []target{
 	{"resource/schema.sql.tmpl", func(s, p string) string { return "internal/db/schema/" + s + ".sql" }, CreateOnly},
 	{"resource/queries.sql.tmpl", func(s, p string) string { return "internal/db/queries/" + s + ".sql" }, CreateOnly},
-	{"resource/table.hcl.tmpl", func(s, p string) string { return "db/atlas/schema/" + s + ".hcl" }, CreateOnly},
+	{"resource/model_repo.go.tmpl", func(s, p string) string { return "internal/models/" + s + ".go" }, CreateOnly},
 	{"resource/seeder.go.tmpl", func(s, p string) string { return "internal/db/seeders/" + s + "_seeder.go" }, CreateOnly},
 }
 

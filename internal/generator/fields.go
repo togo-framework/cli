@@ -74,6 +74,22 @@ func ParseFields(args []string) ([]config.Field, error) {
 	return fields, nil
 }
 
+// SQLiteType maps a field to its SQLite column type (declared type drives sqlc).
+func SQLiteType(f config.Field) string {
+	switch f.Go {
+	case "int64", "int32":
+		return "integer"
+	case "bool":
+		return "boolean"
+	case "float64":
+		return "real"
+	case "time.Time":
+		return "datetime"
+	default: // string, uuid, json
+		return "text"
+	}
+}
+
 // SampleValue returns a Go literal for seeding a field. Nullable fields seed to
 // nil; otherwise a type-appropriate placeholder.
 func SampleValue(f config.Field) string {

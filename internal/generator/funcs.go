@@ -26,9 +26,10 @@ func FuncMap() template.FuncMap {
 		"year":     func() int { return clockYear() },
 		"inc":       func(i int) int { return i + 1 },
 		"add":       func(a, b int) int { return a + b },
-		"atlasType": atlasType,
-		"tsType":    tsType,
-		"sample":    SampleValue,
+		"atlasType":  atlasType,
+		"tsType":     tsType,
+		"sample":     SampleValue,
+		"sqliteType": SQLiteType,
 	}
 }
 

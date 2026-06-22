@@ -12,12 +12,10 @@ import (
 
 func registerDB(root *cobra.Command) {
 	root.AddCommand(
-		dbCmd("migrate", "Apply pending Atlas migrations", []string{"migrate", "apply", "--env", "local"}),
-		dbCmd("migrate:status", "Show migration status", []string{"migrate", "status", "--env", "local"}),
-		dbCmd("migrate:diff", "Generate a migration from the desired schema", []string{"migrate", "diff", "--env", "local"}),
+		appCmd("migrate", "Apply the schema to the database (driver-agnostic)", []string{"run", "./cmd/migrate"}),
 		appCmd("seed", "Seed the database", []string{"run", "./cmd/seed"}),
-		appCmd("migrate:fresh", "Drop everything and re-migrate, then seed", []string{"run", "./cmd/db", "fresh"}),
-		appCmd("db:reset", "Reset the database", []string{"run", "./cmd/db", "reset"}),
+		dbCmd("migrate:diff", "Generate an Atlas migration (advanced)", []string{"migrate", "diff", "--env", "local"}),
+		dbCmd("migrate:status", "Show Atlas migration status (advanced)", []string{"migrate", "status", "--env", "local"}),
 	)
 }
 

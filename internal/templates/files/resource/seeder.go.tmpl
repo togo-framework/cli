@@ -4,14 +4,15 @@ package seeders
 import (
 	"context"
 
-	db "{{.Module}}/internal/db/gen"
+	"{{.Module}}/internal/app"
+	"{{.Module}}/internal/models"
 )
 
-// Seed{{.Resource.Name}} inserts a sample {{.Resource.Name}}.
-func Seed{{.Resource.Name}}(ctx context.Context, q *db.Queries) error {
-	_, err := q.Create{{.Resource.Name}}(ctx, db.Create{{.Resource.Name}}Params{
+// Seed{{.Resource.Name}} inserts a sample {{.Resource.Name}} via the ORM.
+func Seed{{.Resource.Name}}(ctx context.Context, a *app.App) error {
+	_, err := models.{{plural .Resource.Name}}(a).Create(ctx, map[string]any{
 {{- range .Resource.Fields}}
-		{{pascal .Name}}: {{sample .}},
+		"{{.Name}}": {{sample .}},
 {{- end}}
 	})
 	return err

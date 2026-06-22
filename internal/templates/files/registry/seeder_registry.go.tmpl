@@ -4,13 +4,13 @@ package seeders
 import (
 	"context"
 
-	db "{{.Module}}/internal/db/gen"
+	"{{.Module}}/internal/app"
 )
 
 // SeedAll runs every resource seeder. Regenerated from togo.resources.yaml.
-func SeedAll(ctx context.Context, q *db.Queries) error {
+func SeedAll(ctx context.Context, a *app.App) error {
 {{- range .Resources}}
-	if err := Seed{{.Name}}(ctx, q); err != nil {
+	if err := Seed{{.Name}}(ctx, a); err != nil {
 		return err
 	}
 {{- end}}
