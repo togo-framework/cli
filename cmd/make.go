@@ -32,6 +32,8 @@ func RegisterMake(root *cobra.Command) {
 		"make:seeder":    "Generate the seeder for a model",
 		"make:factory":   "Generate the faker factory for a model",
 		"make:page":      "Generate the Next.js page for a model",
+		"make:test":      "Generate a Go feature test (PHPUnit-style) for a model",
+		"make:e2e":       "Generate a Playwright e2e spec (Dusk-style) for a model",
 	} {
 		verb, short := verb, short
 		root.AddCommand(&cobra.Command{

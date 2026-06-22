@@ -60,9 +60,17 @@ var singleTargets = map[string]string{
 	"make:seeder":    "resource/seeder.go.tmpl",
 	"make:factory":   "resource/factory.go.tmpl",
 	"make:page":      "resource/page.tsx.tmpl",
+	"make:test":      "resource/feature_test.go.tmpl",
+	"make:e2e":       "resource/e2e.spec.ts.tmpl",
 }
 
-var allSingleTargets = append(append(append([]target{}, modelTargets...), controllerTargets...), viewTargets...)
+// extraTargets are generated only on demand (make:test, make:e2e).
+var extraTargets = []target{
+	{"resource/feature_test.go.tmpl", func(s, p string) string { return "internal/rest/" + s + "_feature_test.go" }, CreateOnly},
+	{"resource/e2e.spec.ts.tmpl", func(s, p string) string { return "web/e2e/" + s + ".spec.ts" }, CreateOnly},
+}
+
+var allSingleTargets = append(append(append(append([]target{}, modelTargets...), controllerTargets...), viewTargets...), extraTargets...)
 
 // TableName returns the conventional table name (plural snake_case) for a model.
 func TableName(name string) string { return inflector.Plural(Snake(name)) }
