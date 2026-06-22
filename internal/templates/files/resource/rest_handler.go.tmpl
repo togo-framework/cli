@@ -69,7 +69,7 @@ func Register{{.Resource.Name}}Routes(api huma.API, a *app.App) {
 		if err != nil {
 			return nil, huma.Error500InternalServerError("create failed", err)
 		}
-		_ = a.Hooks.Fire(ctx, "{{snake .Resource.Name}}.created", row)
+		a.Emit(ctx, "{{snake .Resource.Name}}.created", row)
 		return &struct {
 			Body resources.{{.Resource.Name}}Response
 		}{Body: resources.Transform{{.Resource.Name}}(*row)}, nil
@@ -84,7 +84,7 @@ func Register{{.Resource.Name}}Routes(api huma.API, a *app.App) {
 		if err := models.{{plural .Resource.Name}}(a).Where("id", "=", in.ID).Delete(ctx); err != nil {
 			return nil, huma.Error500InternalServerError("delete failed", err)
 		}
-		_ = a.Hooks.Fire(ctx, "{{snake .Resource.Name}}.deleted", in.ID)
+		a.Emit(ctx, "{{snake .Resource.Name}}.deleted", in.ID)
 		return &struct{}{}, nil
 	})
 }

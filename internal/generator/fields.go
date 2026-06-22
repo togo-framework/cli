@@ -74,6 +74,37 @@ func ParseFields(args []string) ([]config.Field, error) {
 	return fields, nil
 }
 
+// FakerFor returns a Go expression (faker.*) producing fake data for a field,
+// using the field name as a hint then falling back to its type.
+func FakerFor(f config.Field) string {
+	n := strings.ToLower(f.Name)
+	switch {
+	case strings.Contains(n, "email"):
+		return "faker.Email()"
+	case n == "name" || strings.HasSuffix(n, "_name") || strings.Contains(n, "title"):
+		return "faker.Name()"
+	case strings.Contains(n, "body") || strings.Contains(n, "description") || strings.Contains(n, "content"):
+		return "faker.Paragraph()"
+	case strings.Contains(n, "url") || strings.Contains(n, "link"):
+		return `"https://" + faker.Word() + ".example.com"`
+	}
+	switch f.Go {
+	case "int64", "int32":
+		return "faker.Int(1, 1000)"
+	case "bool":
+		return "faker.Bool()"
+	case "float64":
+		return "faker.Float(0, 1000)"
+	case "time.Time":
+		return "faker.Time()"
+	default:
+		if f.PG == "uuid" {
+			return "faker.UUID()"
+		}
+		return "faker.Words(3)"
+	}
+}
+
 // SQLiteType maps a field to its SQLite column type (declared type drives sqlc).
 func SQLiteType(f config.Field) string {
 	switch f.Go {

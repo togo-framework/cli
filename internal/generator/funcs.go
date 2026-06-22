@@ -30,6 +30,7 @@ func FuncMap() template.FuncMap {
 		"tsType":     tsType,
 		"sample":     SampleValue,
 		"sqliteType": SQLiteType,
+		"fakerFor":   FakerFor,
 	}
 }
 

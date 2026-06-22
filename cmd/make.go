@@ -30,6 +30,7 @@ func RegisterMake(root *cobra.Command) {
 		"make:graphql":   "Generate the GraphQL schema fragment for a model",
 		"make:api":       "Generate the Huma REST handler for a model",
 		"make:seeder":    "Generate the seeder for a model",
+		"make:factory":   "Generate the faker factory for a model",
 		"make:page":      "Generate the Next.js page for a model",
 	} {
 		verb, short := verb, short
