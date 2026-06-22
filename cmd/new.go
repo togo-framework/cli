@@ -1,13 +1,14 @@
 package cmd
 
 import (
-	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
 
+	"github.com/togo-framework/cli/internal/config"
 	"github.com/togo-framework/cli/internal/scaffold"
 	"github.com/togo-framework/cli/internal/ui"
 )
@@ -23,7 +24,6 @@ var featureProviders = map[string]string{
 	"i18n":     "github.com/togo-framework/i18n",
 }
 
-var allFeatures = []string{"cache", "queue", "storage", "realtime", "i18n"}
 
 func registerNew(root *cobra.Command) {
 	cmd := &cobra.Command{
@@ -38,7 +38,7 @@ func registerNew(root *cobra.Command) {
 			force, _ := cmd.Flags().GetBool("force")
 			dry, _ := cmd.Flags().GetBool("dry-run")
 
-			features := resolveFeatures(cmd)
+			selected := resolveSelection(cmd)
 
 			opts := scaffold.Options{App: name, Module: module, Dir: dir, Force: force, DryRun: dry}
 			// Refuse to scaffold over a non-empty directory: overlaying onto leftover
@@ -55,21 +55,33 @@ func registerNew(root *cobra.Command) {
 			}
 			target := opts.Resolve().Dir
 			if dry {
-				ui.Warn("dry-run: would scaffold %d files into %s (features: %s)", created, target, strings.Join(features, ", "))
+				ui.Warn("dry-run: would scaffold %d files into %s (features: %s)", created, target, strings.Join(selected, ", "))
 				return nil
 			}
 			ui.Success("Created togo project %q (%d files)", name, created)
 
-			// Register the chosen feature providers via the plugin mechanism.
-			for _, f := range features {
+			// Register feature providers (cache/queue/…) via blank-imports.
+			for _, f := range selected {
 				if pkg, ok := featureProviders[f]; ok {
 					if err := addPluginImport(target, pkg); err != nil {
 						ui.Warn("enable %s: %v", f, err)
 					}
 				}
 			}
-			if len(features) > 0 {
-				ui.Step("features: %s", strings.Join(features, ", "))
+
+			// Install full plugins (auth backend + dashboard UI/layouts) so the app
+			// ships login/register/dashboard/admin out of the box.
+			if proj, err := config.Load(filepath.Join(target, "togo.yaml")); err == nil {
+				for _, p := range []string{"auth", "dashboard"} {
+					if contains(selected, p) {
+						if err := installPlugin(proj, "togo-framework/"+p); err != nil {
+							ui.Warn("install %s: %v", p, err)
+						}
+					}
+				}
+			}
+			if len(selected) > 0 {
+				ui.Step("included: %s", strings.Join(selected, ", "))
 			}
 
 			// Resolve Go modules so the project is runnable immediately.
@@ -92,51 +104,74 @@ func registerNew(root *cobra.Command) {
 	root.AddCommand(cmd)
 }
 
-// resolveFeatures returns the selected features. Precedence: explicit --features
-// flag → interactive prompt (when attached to a terminal) → all (default, e.g. CI).
-func resolveFeatures(cmd *cobra.Command) []string {
-	if cmd.Flags().Changed("features") {
-		raw, _ := cmd.Flags().GetString("features")
-		return parseFeatures(raw)
+// selectable lists everything `togo new` can include: feature providers + the
+// auth backend + the dashboard UI (login/register/dashboard/admin + layouts).
+func selectable() []ui.Option {
+	return []ui.Option{
+		{Value: "cache", Label: "Cache", Hint: "in-memory/file/db/redis", Default: true},
+		{Value: "queue", Label: "Queue", Hint: "background jobs", Default: true},
+		{Value: "storage", Label: "Storage", Hint: "files/blobs", Default: true},
+		{Value: "realtime", Label: "Realtime", Hint: "SSE/WebSocket events", Default: true},
+		{Value: "i18n", Label: "i18n", Hint: "translations", Default: true},
+		{Value: "auth", Label: "Auth", Hint: "JWT, RBAC, OTP/2FA, sessions", Default: true},
+		{Value: "dashboard", Label: "Dashboard + Admin UI", Hint: "login/register/admin (needs auth)", Default: true},
 	}
-	if isInteractive() {
-		return promptFeatures()
-	}
-	return allFeatures
 }
 
-func parseFeatures(raw string) []string {
-	if strings.TrimSpace(raw) == "" || raw == "all" {
-		return allFeatures
-	}
-	if strings.TrimSpace(raw) == "none" {
-		return nil
-	}
-	var out []string
-	for _, f := range strings.Split(raw, ",") {
-		f = strings.TrimSpace(f)
-		if _, ok := featureProviders[f]; ok {
-			out = append(out, f)
-		}
+func allSelectable() []string {
+	opts := selectable()
+	out := make([]string, len(opts))
+	for i, o := range opts {
+		out[i] = o.Value
 	}
 	return out
 }
 
-// promptFeatures asks which feature plugins to include (Enter = all).
-func promptFeatures() []string {
-	ui.Info("Which feature plugins do you want? (each is a togo-framework provider)")
-	ui.Step("available: %s", strings.Join(allFeatures, ", "))
-	ui.Step("comma-separated list, 'none', or Enter for all")
-	fmt.Print("  features [all]: ")
-	sc := bufio.NewScanner(os.Stdin)
-	if !sc.Scan() {
-		return allFeatures
+// resolveSelection returns the chosen features + plugins. Precedence: explicit
+// --features flag → interactive multi-select → all (non-interactive default).
+func resolveSelection(cmd *cobra.Command) []string {
+	if cmd.Flags().Changed("features") {
+		return parseFeatures(mustString(cmd, "features"))
 	}
-	line := strings.TrimSpace(sc.Text())
-	if line == "" {
-		return allFeatures
+	if isInteractive() {
+		sel := ui.MultiSelect("Select features & plugins for your app", selectable())
+		// dashboard implies auth.
+		if contains(sel, "dashboard") && !contains(sel, "auth") {
+			sel = append(sel, "auth")
+		}
+		return sel
 	}
-	return parseFeatures(line)
+	return allSelectable()
+}
+
+func parseFeatures(raw string) []string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || raw == "all" {
+		return allSelectable()
+	}
+	if raw == "none" {
+		return nil
+	}
+	valid := map[string]bool{}
+	for _, v := range allSelectable() {
+		valid[v] = true
+	}
+	var out []string
+	for _, f := range strings.Split(raw, ",") {
+		f = strings.TrimSpace(f)
+		if valid[f] {
+			out = append(out, f)
+		}
+	}
+	if contains(out, "dashboard") && !contains(out, "auth") {
+		out = append(out, "auth")
+	}
+	return out
+}
+
+func mustString(cmd *cobra.Command, name string) string {
+	v, _ := cmd.Flags().GetString(name)
+	return v
 }
 
 // dirNotEmpty reports whether path exists and contains entries.
