@@ -3,6 +3,7 @@ package scaffold
 
 import (
 	"bytes"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -15,11 +16,12 @@ import (
 
 // Options configures project scaffolding.
 type Options struct {
-	App    string
-	Module string
-	Dir    string
-	Force  bool
-	DryRun bool
+	App      string
+	Module   string
+	Dir      string
+	Force    bool
+	DryRun   bool
+	Frontend string // "tanstack" (default) | "nextjs"
 }
 
 // Resolved is Options with defaults applied.
@@ -27,7 +29,7 @@ type Resolved struct {
 	Options
 }
 
-// Resolve fills in default module path and target directory.
+// Resolve fills in default module path, target directory, and frontend.
 func (o Options) Resolve() Resolved {
 	r := Resolved{Options: o}
 	if r.Dir == "" {
@@ -35,6 +37,9 @@ func (o Options) Resolve() Resolved {
 	}
 	if r.Module == "" {
 		r.Module = "github.com/" + r.App + "/" + r.App
+	}
+	if r.Frontend == "" {
+		r.Frontend = "tanstack"
 	}
 	return r
 }
@@ -72,6 +77,56 @@ func New(opts Options) (int, error) {
 			return nil
 		}
 
+		raw, err := src.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		out, err := renderProjectFile(p, raw, d)
+		if err != nil {
+			return err
+		}
+		count++
+		if r.DryRun {
+			return nil
+		}
+		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+			return err
+		}
+		return os.WriteFile(dest, out, 0o644)
+	})
+	if err != nil {
+		return count, err
+	}
+
+	// Render the chosen frontend (tanstack | nextjs) into the project's web/ dir.
+	fcount, ferr := renderFrontend(r, d)
+	return count + fcount, ferr
+}
+
+// renderFrontend renders template/frontend/<name>/ into <Dir>/web/.
+func renderFrontend(r Resolved, d data) (int, error) {
+	src := createtogoapp.FrontendFS()
+	base := createtogoapp.FrontendRoot + "/" + r.Frontend
+	if _, err := fs.Stat(src, base); err != nil {
+		return 0, fmt.Errorf("unknown frontend %q", r.Frontend)
+	}
+	count := 0
+	err := fs.WalkDir(src, base, func(p string, de fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if de.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(base, p)
+		if err != nil {
+			return err
+		}
+		rel = strings.TrimSuffix(rel, ".tmpl")
+		dest := filepath.Join(r.Dir, "web", rel)
+		if !r.Force && fileExists(dest) {
+			return nil
+		}
 		raw, err := src.ReadFile(p)
 		if err != nil {
 			return err

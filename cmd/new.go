@@ -40,7 +40,12 @@ func registerNew(root *cobra.Command) {
 
 			selected := resolveSelection(cmd)
 
-			opts := scaffold.Options{App: name, Module: module, Dir: dir, Force: force, DryRun: dry}
+			frontend, _ := cmd.Flags().GetString("frontend")
+			if frontend != "tanstack" && frontend != "nextjs" {
+				return fmt.Errorf("invalid --frontend %q (allowed: tanstack, nextjs)", frontend)
+			}
+
+			opts := scaffold.Options{App: name, Module: module, Dir: dir, Force: force, DryRun: dry, Frontend: frontend}
 			// Refuse to scaffold over a non-empty directory: overlaying onto leftover
 			// files (e.g. an incomplete `rm`) silently skips them and produces a broken
 			// mix of old + new code. --force overrides.
@@ -59,6 +64,7 @@ func registerNew(root *cobra.Command) {
 				return nil
 			}
 			ui.Success("Created togo project %q (%d files)", name, created)
+			ui.Step("frontend: %s", frontend)
 
 			// Register feature providers (cache/queue/…) via blank-imports.
 			for _, f := range selected {
@@ -76,7 +82,9 @@ func registerNew(root *cobra.Command) {
 				if contains(selected, "auth") {
 					installs = append(installs, "auth", "auth-dev") // auth-dev is dev-only (no-op in prod)
 				}
-				if contains(selected, "dashboard") {
+				// The dashboard plugin injects a Next.js web app; only install it for the
+				// Next frontend. The TanStack template already ships its own dashboard.
+				if contains(selected, "dashboard") && frontend == "nextjs" {
 					installs = append(installs, "dashboard")
 				}
 				for _, p := range installs {
@@ -105,6 +113,7 @@ func registerNew(root *cobra.Command) {
 	cmd.Flags().String("module", "", "Go module path (default: github.com/<app>/<app>)")
 	cmd.Flags().String("dir", "", "target directory (default: ./<app>)")
 	cmd.Flags().String("features", "", "comma-separated features (cache,queue,storage,realtime,i18n); default: all")
+	cmd.Flags().String("frontend", "tanstack", "web frontend: tanstack (default) | nextjs")
 	cmd.Flags().Bool("skip-tidy", false, "do not run `go mod tidy` after scaffolding")
 	root.AddCommand(cmd)
 }
