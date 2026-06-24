@@ -13,30 +13,41 @@ import (
 	"github.com/togo-framework/cli/internal/ui"
 )
 
-const deployLong = `Fast push-and-build deploy of a togo app to a server.
+const deployLong = `Deploy a togo app — provider-routed.
 
-Reads the deploy: block from togo.yaml (env vars TOGO_DEPLOY_HOST/USER/PATH/SSH_KEY
-override). It builds the app locally (frontend + Go binary), rsyncs the artifact to
-the server, then runs the configured restart command over ssh — so an update ships
-in seconds.
+Reads the deploy: block from togo.yaml. With no provider (or provider: ssh|vps) it
+uses the built-in push-and-build: build locally (frontend + Go binary), rsync the
+artifact to the server, then run the restart command over ssh (env vars
+TOGO_DEPLOY_HOST/USER/PATH/SSH_KEY override).
 
+Set deploy.provider (or --provider) to any other value and the deploy routes through
+the togo-framework/deploy plugin and its matching deploy-<provider> driver
+(docker, kubernetes, terraform, gcp, aws, digitalocean, azure, vultr, hetzner, ovh,
+ubuntu, centos, debian). Install the one you use first:
+
+  togo install togo-framework/deploy-docker
+
+  # built-in ssh provider (default):
   deploy:
     host: 152.53.136.52
     user: root
     path: /opt/myapp
     restart: systemctl restart myapp
-    # …or multiple environments:
-    # default: production
-    # targets:
-    #   production: { host: …, user: …, path: …, restart: … }
-    #   staging:    { host: …, user: …, path: …, restart: … }
+
+  # plugin provider — e.g. docker:
+  deploy:
+    provider: docker
+    image: ghcr.io/me/myapp:latest
+    domain: myapp.com
+    options: { compose: docker-compose.yml }
 
 Examples:
-  togo deploy                 # the inline target, or deploy.default
-  togo deploy staging         # a named target under deploy.targets
-  togo deploy --dry-run       # print the plan without touching the server
-  togo deploy --no-build      # ship the existing build
-  togo deploy --remote-build  # rsync the source and build on the server`
+  togo deploy                      # inline/default target (ssh) or the configured provider
+  togo deploy staging              # a named target under deploy.targets
+  togo deploy --provider docker    # override the provider for this run
+  togo deploy --dry-run            # print the plan without changing anything
+  togo deploy --no-build           # (ssh) ship the existing build
+  togo deploy --remote-build       # (ssh) rsync the source and build on the server`
 
 func registerDeploy(root *cobra.Command) {
 	c := &cobra.Command{
@@ -57,17 +68,20 @@ func registerDeploy(root *cobra.Command) {
 			noBuild, _ := cmd.Flags().GetBool("no-build")
 			remoteBuild, _ := cmd.Flags().GetBool("remote-build")
 			dryRun, _ := cmd.Flags().GetBool("dry-run")
-			return runDeploy(proj, env, deployOpts{noBuild: noBuild, remoteBuild: remoteBuild, dryRun: dryRun})
+			provider, _ := cmd.Flags().GetString("provider")
+			return runDeploy(proj, env, deployOpts{noBuild: noBuild, remoteBuild: remoteBuild, dryRun: dryRun, provider: provider})
 		},
 	}
-	c.Flags().Bool("no-build", false, "skip the build; ship the existing artifact")
-	c.Flags().Bool("remote-build", false, "rsync the source and build on the server")
+	c.Flags().Bool("no-build", false, "skip the build; ship the existing artifact (ssh provider)")
+	c.Flags().Bool("remote-build", false, "rsync the source and build on the server (ssh provider)")
 	c.Flags().Bool("dry-run", false, "print the deploy plan without changing anything")
+	c.Flags().StringP("provider", "p", "", "deploy provider override (docker, kubernetes, terraform, gcp, aws, …); empty = ssh/vps")
 	root.AddCommand(c)
 }
 
 type deployOpts struct {
 	noBuild, remoteBuild, dryRun bool
+	provider                     string
 }
 
 // resolveTarget selects the deploy target for env and applies env-var overrides + defaults.
@@ -130,7 +144,15 @@ func resolveTarget(proj *config.Project, env string) (config.DeployTarget, strin
 func runDeploy(proj *config.Project, env string, o deployOpts) error {
 	t, name, err := resolveTarget(proj, env)
 	if err != nil {
+		// A provider may be configured without an ssh target (e.g. docker/cloud).
+		if prov := resolveProvider(proj, config.DeployTarget{}, o.provider); !isSSHProvider(prov) {
+			return runPluginDeploy(proj, prov, "deploy", proj.Deploy.DeployTarget, o)
+		}
 		return err
+	}
+	// Route to the deploy plugin + its provider driver when a non-ssh provider is set.
+	if prov := resolveProvider(proj, t, o.provider); !isSSHProvider(prov) {
+		return runPluginDeploy(proj, prov, "deploy", t, o)
 	}
 	if t.Host == "" || t.User == "" || t.Path == "" {
 		return fmt.Errorf("deploy target %s is missing host/user/path — set them in togo.yaml deploy:", name)

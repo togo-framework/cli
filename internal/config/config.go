@@ -79,18 +79,27 @@ type Deploy struct {
 // DeployTarget is one server/environment for `togo deploy`. Env vars
 // TOGO_DEPLOY_HOST/USER/PATH/SSH_KEY override the resolved values at deploy time.
 type DeployTarget struct {
-	Host        string `yaml:"host"`
-	User        string `yaml:"user"`
-	Path        string `yaml:"path"`
-	Port        int    `yaml:"port"`
-	SSHKey      string `yaml:"ssh_key"`
-	Build       string `yaml:"build"`        // local build command; default = frontend build + `go build`
-	Artifact    string `yaml:"artifact"`     // file/dir to ship; default = the built binary
-	Restart     string `yaml:"restart"`      // remote command run after upload
-	RemoteBuild bool   `yaml:"remote_build"` // rsync source and build on the server
-	GOOS        string `yaml:"goos"`         // target OS for the binary (default linux)
-	GOARCH      string `yaml:"goarch"`       // target arch (default amd64)
-	Binary      string `yaml:"binary"`       // output binary name (default = project name)
+	// Provider selects the deploy backend. Empty / "ssh" / "vps" = the built-in
+	// rsync+ssh push-and-build. Any other value (docker, kubernetes, terraform,
+	// gcp, aws, digitalocean, …) routes through the `togo-framework/deploy` plugin
+	// and its matching `deploy-<provider>` driver (install with `togo install`).
+	Provider    string         `yaml:"provider"`
+	Host        string         `yaml:"host"`
+	User        string         `yaml:"user"`
+	Path        string         `yaml:"path"`
+	Port        int            `yaml:"port"`
+	SSHKey      string         `yaml:"ssh_key"`
+	Build       string         `yaml:"build"`        // local build command; default = frontend build + `go build`
+	Artifact    string         `yaml:"artifact"`     // file/dir to ship; default = the built binary
+	Restart     string         `yaml:"restart"`      // remote command run after upload
+	RemoteBuild bool           `yaml:"remote_build"` // rsync source and build on the server
+	GOOS        string         `yaml:"goos"`         // target OS for the binary (default linux)
+	GOARCH      string         `yaml:"goarch"`       // target arch (default amd64)
+	Binary      string         `yaml:"binary"`       // output binary name (default = project name)
+	Image       string         `yaml:"image"`        // container image ref (docker/kubernetes providers)
+	Domain      string         `yaml:"domain"`       // public domain (cloud/proxy providers)
+	Region      string         `yaml:"region"`       // cloud region
+	Options     map[string]any `yaml:"options"`      // provider-specific knobs passed through to the driver
 }
 
 // Load finds and parses togo.yaml. If path is empty it searches from the current
