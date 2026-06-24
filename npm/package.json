@@ -1,6 +1,6 @@
 {
   "name": "@togo-framework/cli",
-  "version": "0.2.17",
+  "version": "0.2.18",
   "description": "The togo CLI — scaffold and manage togo (Go + React) full-stack apps. Installs the prebuilt binary on postinstall.",
   "bin": {
     "togo": "bin/togo.js"
