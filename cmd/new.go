@@ -48,6 +48,13 @@ func registerNew(root *cobra.Command) {
 			name := args[0]
 			module, _ := cmd.Flags().GetString("module")
 			dir, _ := cmd.Flags().GetString("dir")
+			// The arg may be a bare name or a path (`togo new /tmp/myapp`). The app
+			// name (and Go module) is the basename; the target directory is the arg
+			// unless --dir is given. Fixes the malformed module github.com//tmp/myapp//tmp/myapp.
+			appName := filepath.Base(filepath.Clean(name))
+			if dir == "" {
+				dir = name
+			}
 			force, _ := cmd.Flags().GetBool("force")
 			dry, _ := cmd.Flags().GetBool("dry-run")
 
@@ -72,7 +79,7 @@ func registerNew(root *cobra.Command) {
 			}
 			selected := resolveSelection(cmd)
 
-			opts := scaffold.Options{App: name, Module: module, Dir: dir, Force: force, DryRun: dry, Frontend: frontend, DB: database}
+			opts := scaffold.Options{App: appName, Module: module, Dir: dir, Force: force, DryRun: dry, Frontend: frontend, DB: database}
 			// Refuse to scaffold over a non-empty directory: overlaying onto leftover
 			// files (e.g. an incomplete `rm`) silently skips them and produces a broken
 			// mix of old + new code. --force overrides.
