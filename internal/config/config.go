@@ -29,6 +29,7 @@ type Project struct {
 	Deploy   Deploy         `yaml:"deploy"`
 	DNS      DNS            `yaml:"dns"`
 	Proxy    DNS            `yaml:"proxy"`
+	Tunnel   Tunnel         `yaml:"tunnel"`
 	Extra    map[string]any `yaml:",inline"`
 
 	// Root is the absolute directory containing togo.yaml (not serialized).
@@ -115,6 +116,19 @@ type DeployTarget struct {
 type DNS struct {
 	Provider string `yaml:"provider"`
 	Zone     string `yaml:"zone"`
+}
+
+// Tunnel configures `togo tunnel` — exposing the local app to the public internet
+// through the `togo-framework/tunnel` plugin + a `tunnel-<provider>` driver
+// (cloudflare/ngrok/tailscale/frp). Selected by `tunnel.provider` (or --provider,
+// or the TUNNEL_DRIVER env). `addr` is the default local address to tunnel.
+//
+//	tunnel:
+//	  provider: cloudflare   # or ngrok | tailscale | frp
+//	  addr: localhost:8080
+type Tunnel struct {
+	Provider string `yaml:"provider"`
+	Addr     string `yaml:"addr"`
 }
 
 // Load finds and parses togo.yaml. If path is empty it searches from the current

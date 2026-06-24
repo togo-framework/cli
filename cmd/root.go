@@ -86,6 +86,7 @@ func init() {
 	registerDeploy(rootCmd)
 	registerBot(rootCmd)
 	registerProxy(rootCmd)
+	registerTunnel(rootCmd)
 	registerStubPublish(rootCmd)
 	registerDoctor(rootCmd)
 }
