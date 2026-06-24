@@ -25,6 +25,18 @@ var featureProviders = map[string]string{
 	"i18n":     "github.com/togo-framework/i18n",
 }
 
+// dbProviders maps a database stack to its driver PLUGIN package. The driver is a
+// plugin (blank-imported into internal/plugins, same as features) — never baked
+// into the app's go.mod/app.go. sqlite is built into the kernel, so no plugin.
+// Postgres-wire-compatible stacks (supabase, togo-postgres) reuse db-postgres.
+var dbProviders = map[string]string{
+	"postgres":      "github.com/togo-framework/db-postgres",
+	"togo-postgres": "github.com/togo-framework/db-postgres",
+	"supabase":      "github.com/togo-framework/db-postgres",
+	"mysql":         "github.com/togo-framework/db-mysql",
+	"mongodb":       "github.com/togo-framework/db-mongodb",
+}
+
 
 func registerNew(root *cobra.Command) {
 	cmd := &cobra.Command{
@@ -77,6 +89,15 @@ func registerNew(root *cobra.Command) {
 					if err := addPluginImport(target, pkg); err != nil {
 						ui.Warn("enable %s: %v", f, err)
 					}
+				}
+			}
+
+			// Install the database driver PLUGIN for the chosen stack (sqlite is
+			// built into the kernel — no plugin). The driver lives in the plugin,
+			// not the app's go.mod/app.go.
+			if pkg := dbProviders[database]; pkg != "" {
+				if err := addPluginImport(target, pkg); err != nil {
+					ui.Warn("enable db %s: %v", database, err)
 				}
 			}
 
