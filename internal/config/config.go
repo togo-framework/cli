@@ -27,6 +27,8 @@ type Project struct {
 	Plugins  []string       `yaml:"plugins"`
 	Frontend Frontend       `yaml:"frontend"`
 	Deploy   Deploy         `yaml:"deploy"`
+	DNS      DNS            `yaml:"dns"`
+	Proxy    DNS            `yaml:"proxy"`
 	Extra    map[string]any `yaml:",inline"`
 
 	// Root is the absolute directory containing togo.yaml (not serialized).
@@ -100,6 +102,19 @@ type DeployTarget struct {
 	Domain      string         `yaml:"domain"`       // public domain (cloud/proxy providers)
 	Region      string         `yaml:"region"`       // cloud region
 	Options     map[string]any `yaml:"options"`      // provider-specific knobs passed through to the driver
+}
+
+// DNS configures `togo proxy` — managing DNS records, reverse-proxy hosts, and
+// API-gateway routes through the `togo-framework/dns` plugin + a `dns-<provider>`
+// driver (cloudflare/npm/caddy/kong). Selected by `dns.provider` (or `proxy.provider`,
+// or --provider, or the DNS_DRIVER env). `zone` is the default DNS zone for records.
+//
+//	dns:
+//	  provider: cloudflare   # or npm | caddy | kong
+//	  zone: example.com
+type DNS struct {
+	Provider string `yaml:"provider"`
+	Zone     string `yaml:"zone"`
 }
 
 // Load finds and parses togo.yaml. If path is empty it searches from the current

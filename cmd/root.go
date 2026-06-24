@@ -84,6 +84,8 @@ func init() {
 	registerMCP(rootCmd)
 	registerInfra(rootCmd)
 	registerDeploy(rootCmd)
+	registerBot(rootCmd)
+	registerProxy(rootCmd)
 	registerStubPublish(rootCmd)
 	registerDoctor(rootCmd)
 }
