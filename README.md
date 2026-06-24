@@ -36,16 +36,64 @@ irm https://raw.githubusercontent.com/togo-framework/cli/main/update.ps1 | iex  
 ## Commands
 
 ```
-Project      togo new <app> · togo serve · togo version
-Make         togo make:resource <Name> <field:type...>  (model, sqlc, Atlas, GraphQL, REST, seeder, Next.js page)
-             togo make:model|query|migration|graphql|api|seeder|page
-Codegen      togo generate   (sqlc → gqlgen → atlas diff → OpenAPI export)
+Project      togo new <app> · togo dev · togo serve · togo web · togo version · togo upgrade
+Make         togo make:resource <Name> <field:type...>   (model, sqlc, Atlas schema, GraphQL, REST, seeder, page)
+             togo make:model · make:controller · make:action · make:view · make:plugin
+Codegen      togo generate   (sqlc → gqlgen → Atlas diff/migrate → OpenAPI export)
              togo stub:publish
-Database     togo migrate · migrate:diff · migrate:status · migrate:fresh · seed · db:reset
-Plugins      togo install <owner/repo> · togo plugin:list
-MCP / AI     togo mcp:install --agent claude-code · togo mcp:serve
-Infra        togo infra:init <provider> · togo deploy
+Quality      togo format · togo lint · togo test
+Marketplace  togo install <owner/repo | agent:<name> | skill:<name> | claude> · togo install --list · togo plugin:list
+Deploy       togo deploy [env]
+AI / MCP     togo mcp:install · togo mcp:serve · togo agent <description>
+Diagnostics  togo doctor    (checks &amp; auto-installs Go, Node/npm, sqlc, atlas)
+Infra        togo infra:init <provider>
 ```
+
+`togo new` and the generators auto-install any missing toolchain (Go, Node/npm,
+sqlc, atlas); run `togo doctor` any time to check or repair them.
+
+## Install — plugins, agents & skills
+
+Everything in the [togo marketplace](https://to-go.dev/marketplace) installs with one command:
+
+```bash
+togo install togo-framework/auth     # a plugin (Go capability) — go get + auto-register
+togo install agent:togo-backend      # an AI agent  → .claude/agents/togo-backend.md
+togo install skill:resource          # a skill       → .claude/commands/resource.md
+togo install claude                  # the togo Claude Code plugin (15-agent team + auto-wired MCP)
+togo install --list                  # list every installable plugin, agent and skill
+```
+
+Agents and skills are sourced from the [togo Claude Code plugin](https://github.com/togo-framework/claude-togo) and dropped into your project's `.claude/` so Claude Code picks them up immediately.
+
+## Deploy
+
+`togo deploy` ships a togo app to your server fast — build locally, rsync the
+artifact (scp fallback), and run a restart command over SSH. Config lives in
+`togo.yaml`:
+
+```yaml
+deploy:
+  host: 203.0.113.10
+  user: deploy
+  path: /opt/myapp
+  restart: systemctl restart myapp        # run over SSH after upload
+  # optional: port · ssh_key · build · binary · goos · goarch · remote_build
+  # multi-environment instead of the inline target:
+  # default: production
+  # targets:
+  #   production: { host: …, user: …, path: …, restart: … }
+  #   staging:    { host: …, user: …, path: …, restart: … }
+```
+
+```bash
+togo deploy                  # the inline target (or deploy.default)
+togo deploy staging          # a named target
+togo deploy --dry-run        # print the plan, change nothing
+togo deploy --remote-build   # rsync source and build on the server
+```
+
+Env overrides: `TOGO_DEPLOY_HOST` / `_USER` / `_PATH` / `_SSH_KEY`.
 
 ## Generators
 
