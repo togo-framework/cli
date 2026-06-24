@@ -106,6 +106,94 @@ func renderMulti(label string, opts []Option, sel []bool, cursor, prev int) int 
 	return len(opts) + 2
 }
 
+// Select renders a Laravel-Prompts-style single-choice (radio) list. ↑/↓ move,
+// Enter confirms. Falls back to the default option when stdin is not a terminal.
+// Returns the chosen value.
+func Select(label string, opts []Option) string {
+	fd := int(os.Stdin.Fd())
+	if !term.IsTerminal(fd) {
+		return selectDefault(opts)
+	}
+	state, err := term.MakeRaw(fd)
+	if err != nil {
+		return selectDefault(opts)
+	}
+	defer term.Restore(fd, state)
+
+	cursor := 0
+	for i, o := range opts {
+		if o.Default {
+			cursor = i
+			break
+		}
+	}
+	buf := make([]byte, 3)
+	rendered := 0
+	for {
+		rendered = renderSelect(label, opts, cursor, rendered)
+		n, _ := os.Stdin.Read(buf)
+		if n == 0 {
+			continue
+		}
+		switch {
+		case buf[0] == 3 || buf[0] == 'q': // Ctrl-C / q → cancel = keep default
+			term.Restore(fd, state)
+			fmt.Print("\r\n")
+			return selectDefault(opts)
+		case buf[0] == '\r' || buf[0] == '\n':
+			term.Restore(fd, state)
+			fmt.Print("\r\n")
+			return opts[cursor].Value
+		case n >= 3 && buf[0] == 27 && buf[1] == '[':
+			if buf[2] == 'A' { // up
+				cursor = (cursor - 1 + len(opts)) % len(opts)
+			} else if buf[2] == 'B' { // down
+				cursor = (cursor + 1) % len(opts)
+			}
+		}
+	}
+}
+
+// renderSelect redraws the radio list in place and returns the number of lines drawn.
+func renderSelect(label string, opts []Option, cursor, prev int) int {
+	if prev > 0 {
+		fmt.Printf("\x1b[%dA", prev)
+	}
+	var b strings.Builder
+	clr := "\x1b[2K"
+	fmt.Fprintf(&b, "%s%s %s\r\n", clr, pcyan("◆"), pbold(label))
+	for i, o := range opts {
+		radio := pdim("○")
+		ptr := "  "
+		line := o.Label
+		if i == cursor {
+			radio = pgreen("●")
+			ptr = pcyan("›") + " "
+			line = pbold(o.Label)
+		}
+		hint := ""
+		if o.Hint != "" {
+			hint = "  " + pdim(o.Hint)
+		}
+		fmt.Fprintf(&b, "%s%s%s %s%s\r\n", clr, ptr, radio, line, hint)
+	}
+	fmt.Fprintf(&b, "%s%s\r\n", clr, pdim("↑/↓ move · enter select"))
+	fmt.Print(b.String())
+	return len(opts) + 2
+}
+
+func selectDefault(opts []Option) string {
+	for _, o := range opts {
+		if o.Default {
+			return o.Value
+		}
+	}
+	if len(opts) > 0 {
+		return opts[0].Value
+	}
+	return ""
+}
+
 // Confirm asks a yes/no question (Enter accepts the default).
 func Confirm(label string, def bool) bool {
 	fd := int(os.Stdin.Fd())

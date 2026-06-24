@@ -38,12 +38,11 @@ func registerNew(root *cobra.Command) {
 			force, _ := cmd.Flags().GetBool("force")
 			dry, _ := cmd.Flags().GetBool("dry-run")
 
-			selected := resolveSelection(cmd)
-
-			frontend, _ := cmd.Flags().GetString("frontend")
-			if frontend != "tanstack" && frontend != "nextjs" {
-				return fmt.Errorf("invalid --frontend %q (allowed: tanstack, nextjs)", frontend)
+			frontend, err := resolveFrontend(cmd)
+			if err != nil {
+				return err
 			}
+			selected := resolveSelection(cmd)
 
 			opts := scaffold.Options{App: name, Module: module, Dir: dir, Force: force, DryRun: dry, Frontend: frontend}
 			// Refuse to scaffold over a non-empty directory: overlaying onto leftover
@@ -156,6 +155,30 @@ func resolveSelection(cmd *cobra.Command) []string {
 		return sel
 	}
 	return allSelectable()
+}
+
+// frontendOptions lists the web frontends `togo new` can scaffold.
+func frontendOptions() []ui.Option {
+	return []ui.Option{
+		{Value: "tanstack", Label: "TanStack (React + Vite)", Hint: "default · SPA, same-origin API", Default: true},
+		{Value: "nextjs", Label: "Next.js (App Router)", Hint: "SSR/SSG", Default: false},
+	}
+}
+
+// resolveFrontend picks the web frontend. Precedence: explicit --frontend flag →
+// interactive single-select → tanstack (non-interactive default).
+func resolveFrontend(cmd *cobra.Command) (string, error) {
+	if cmd.Flags().Changed("frontend") {
+		f := mustString(cmd, "frontend")
+		if f != "tanstack" && f != "nextjs" {
+			return "", fmt.Errorf("invalid --frontend %q (allowed: tanstack, nextjs)", f)
+		}
+		return f, nil
+	}
+	if isInteractive() {
+		return ui.Select("Choose a frontend stack", frontendOptions()), nil
+	}
+	return "tanstack", nil
 }
 
 func parseFeatures(raw string) []string {
