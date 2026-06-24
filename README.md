@@ -124,3 +124,12 @@ togo is proudly sponsored by **ID8 Media** and **One Studio**.
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
   <a href="https://one-studio.co"><img src=".github/assets/one-studio.jpeg" height="44" alt="One Studio" /></a>
 </p>
+
+## Plugin assets — `.claude/` + frontend (injected on install)
+
+`togo install <owner>/<repo>` injects a plugin's project-side assets into your app:
+
+- **`.claude/`** — any `agents/`, `skills/` (or `commands/`), `hooks/`, `rules/` the plugin ships are copied into your project's `.claude/` so Claude Code picks them up next session.
+- **frontend** — pages/components are injected into your `web/` (the app's frontend dir).
+
+Existing project files are **kept** (merge); pass `--force` to overwrite. A plugin declares these in `togo.plugin.yaml` (`claude: .claude`, `frontend.dir: web`) or they're auto-detected.

@@ -30,7 +30,11 @@ type pluginManifest struct {
 	Frontend struct {
 		Dir string `yaml:"dir"`
 	} `yaml:"frontend"`
-	Env []string `yaml:"env"`
+	// Claude is the path (within the plugin repo) to a .claude/ tree of
+	// agents/skills/hooks/rules injected into the project's .claude/ on install.
+	// Defaults to ".claude" (auto-detected) when omitted.
+	Claude string   `yaml:"claude"`
+	Env    []string `yaml:"env"`
 }
 
 func registerPlugin(root *cobra.Command) {
@@ -75,7 +79,8 @@ this project's .claude/ so Claude Code picks them up immediately.`,
 				if err != nil {
 					return err
 				}
-				return installPlugin(proj, arg)
+				force, _ := cmd.Flags().GetBool("force")
+				return installPlugin(proj, arg, force)
 			}
 			// bare name: auto-detect an agent/skill, else explain.
 			if kind, ok := resolveBareAsset(arg); ok {
@@ -89,6 +94,7 @@ this project's .claude/ so Claude Code picks them up immediately.`,
 		},
 	}
 	install.Flags().Bool("list", false, "List installable agents, skills, and plugins")
+	install.Flags().Bool("force", false, "Overwrite existing project files when injecting a plugin's frontend / .claude assets")
 
 	list := &cobra.Command{
 		Use:     "plugin:list",
@@ -147,7 +153,7 @@ func installClaudePlugin() error {
 	return nil
 }
 
-func installPlugin(proj *config.Project, repo string) error {
+func installPlugin(proj *config.Project, repo string, force bool) error {
 	repo = strings.TrimPrefix(strings.TrimSuffix(repo, "/"), "github.com/")
 	if strings.Count(repo, "/") < 1 {
 		return fmt.Errorf("expected owner/repo (e.g. fadymondy/cms), got %q", repo)
@@ -180,15 +186,27 @@ func installPlugin(proj *config.Project, repo string) error {
 	}
 	recordPluginInConfig(proj, pkg)
 
-	// Inject the plugin's frontend (pages/components) into the app's web/.
+	// Inject the plugin's frontend (pages/components) into the app's web/, and its
+	// .claude/ assets (agents/skills/hooks/rules) into the project's .claude/.
 	webDir := "web"
-	if m, _ := fetchManifest(repo); m != nil && m.Frontend.Dir != "" {
-		webDir = m.Frontend.Dir
+	claudeDir := ".claude"
+	if m, _ := fetchManifest(repo); m != nil {
+		if m.Frontend.Dir != "" {
+			webDir = m.Frontend.Dir
+		}
+		if m.Claude != "" {
+			claudeDir = m.Claude
+		}
 	}
-	if n, err := injectFrontend(proj, module, webDir); err != nil {
+	if n, err := injectFrontend(proj, module, webDir, force); err != nil {
 		ui.Warn("frontend injection skipped: %v", err)
 	} else if n > 0 {
 		ui.Step("injected %d frontend file(s) into %s/", n, proj.Frontend.Dir)
+	}
+	if s, err := injectClaude(proj, module, claudeDir, force); err != nil {
+		ui.Warn(".claude injection skipped: %v", err)
+	} else if s.total() > 0 {
+		ui.Step("added to .claude/ — %s (Claude Code picks them up next session)", s.String())
 	}
 
 	// Resolve the new dependency.
@@ -313,7 +331,7 @@ func goModuleDir(projRoot, module string) (string, error) {
 
 // injectFrontend copies a plugin's web/ subtree (pages, components) into the
 // app's frontend dir so the plugin can serve UI (e.g. auth views).
-func injectFrontend(proj *config.Project, module, webSub string) (int, error) {
+func injectFrontend(proj *config.Project, module, webSub string, force bool) (int, error) {
 	dir, err := goModuleDir(proj.Root, module)
 	if err != nil || dir == "" {
 		return 0, err
@@ -338,11 +356,16 @@ func injectFrontend(proj *config.Project, module, webSub string) (int, error) {
 		if err != nil {
 			return err
 		}
+		target := filepath.Join(dest, rel)
+		if !force {
+			if _, err := os.Stat(target); err == nil {
+				return nil // keep the project's existing file
+			}
+		}
 		data, err := os.ReadFile(p)
 		if err != nil {
 			return err
 		}
-		target := filepath.Join(dest, rel)
 		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 			return err
 		}
@@ -353,6 +376,93 @@ func injectFrontend(proj *config.Project, module, webSub string) (int, error) {
 		return nil
 	})
 	return count, err
+}
+
+// claudeSummary counts the .claude/ assets a plugin install injected.
+type claudeSummary struct{ agents, skills, hooks, rules, other int }
+
+func (s claudeSummary) total() int { return s.agents + s.skills + s.hooks + s.rules + s.other }
+
+func (s claudeSummary) String() string {
+	var parts []string
+	add := func(n int, label string) {
+		if n > 0 {
+			parts = append(parts, fmt.Sprintf("%d %s", n, label))
+		}
+	}
+	add(s.agents, "agent(s)")
+	add(s.skills, "skill(s)")
+	add(s.hooks, "hook(s)")
+	add(s.rules, "rule(s)")
+	add(s.other, "file(s)")
+	return strings.Join(parts, ", ")
+}
+
+func firstSegment(rel string) string {
+	rel = filepath.ToSlash(rel)
+	if i := strings.IndexByte(rel, '/'); i >= 0 {
+		return rel[:i]
+	}
+	return rel
+}
+
+// injectClaude copies a plugin's .claude/ subtree (agents/skills/commands/hooks/rules)
+// into the PROJECT's .claude/ so Claude Code picks them up. Existing files are kept
+// (merge) unless force is set.
+func injectClaude(proj *config.Project, module, claudeSub string, force bool) (claudeSummary, error) {
+	var s claudeSummary
+	dir, err := goModuleDir(proj.Root, module)
+	if err != nil || dir == "" {
+		return s, err
+	}
+	src := filepath.Join(dir, claudeSub)
+	if _, err := os.Stat(src); err != nil {
+		return s, nil // plugin ships no .claude/ assets
+	}
+	dest := filepath.Join(proj.Root, ".claude")
+	err = filepath.WalkDir(src, func(p string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(src, p)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(dest, rel)
+		if !force {
+			if _, err := os.Stat(target); err == nil {
+				return nil // don't clobber the project's existing asset
+			}
+		}
+		data, err := os.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(target, data, 0o644); err != nil {
+			return err
+		}
+		seg := firstSegment(rel)
+		switch {
+		case seg == "agents" && strings.HasSuffix(rel, ".md"):
+			s.agents++
+		case seg == "rules" && strings.HasSuffix(rel, ".md"):
+			s.rules++
+		case (seg == "skills" && strings.HasSuffix(rel, "SKILL.md")) || (seg == "commands" && strings.HasSuffix(rel, ".md")):
+			s.skills++
+		case seg == "hooks":
+			s.hooks++
+		default:
+			s.other++
+		}
+		return nil
+	})
+	return s, err
 }
 
 func goGet(dir, mod string) error {

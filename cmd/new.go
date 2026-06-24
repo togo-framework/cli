@@ -132,7 +132,7 @@ func registerNew(root *cobra.Command) {
 					installs = append(installs, "dashboard")
 				}
 				for _, p := range installs {
-					if err := installPlugin(proj, "togo-framework/"+p); err != nil {
+					if err := installPlugin(proj, "togo-framework/"+p, force); err != nil {
 						ui.Warn("install %s: %v", p, err)
 					}
 				}
