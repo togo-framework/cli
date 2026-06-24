@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/togo-framework/cli/internal/config"
+	"github.com/togo-framework/cli/internal/toolchain"
 	"github.com/togo-framework/cli/internal/ui"
 )
 
@@ -53,6 +54,18 @@ func runGenerate(proj *config.Project, only, skip []string) error {
 	// Tools run via `go run <pkg>@<version>` so nothing needs to be pre-installed.
 	// Every step is soft-fail: a missing tool or partial setup warns but never
 	// breaks the `togo generate && togo migrate && togo serve` chain.
+	// Ensure the toolchain the pipeline needs (Go, sqlc, atlas) — installs any
+	// that are missing so codegen never silently skips sqlc and breaks the build.
+	if err := toolchain.EnsureGo(); err != nil {
+		ui.Warn("Go: %v", err)
+	}
+	if err := toolchain.EnsureSqlc(); err != nil {
+		ui.Warn("sqlc: %v", err)
+	}
+	if err := toolchain.EnsureAtlas(); err != nil {
+		ui.Warn("atlas: %v", err)
+	}
+
 	steps := []genStep{
 		// sqlc uses a CGO Postgres parser, so prefer the installed binary rather
 		// than compiling from source (brittle across toolchains).

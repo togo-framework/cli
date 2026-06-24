@@ -11,6 +11,7 @@ import (
 
 	"github.com/togo-framework/cli/internal/config"
 	"github.com/togo-framework/cli/internal/scaffold"
+	"github.com/togo-framework/cli/internal/toolchain"
 	"github.com/togo-framework/cli/internal/ui"
 )
 
@@ -37,7 +38,6 @@ var dbProviders = map[string]string{
 	"mongodb":       "github.com/togo-framework/db-mongodb",
 }
 
-
 func registerNew(root *cobra.Command) {
 	cmd := &cobra.Command{
 		Use:     "new <app>",
@@ -50,6 +50,17 @@ func registerNew(root *cobra.Command) {
 			dir, _ := cmd.Flags().GetString("dir")
 			force, _ := cmd.Flags().GetBool("force")
 			dry, _ := cmd.Flags().GetBool("dry-run")
+
+			// Ensure Go + Node are present (install if missing) — scaffolding runs
+			// `go mod tidy` and the frontend needs npm. Skipped on dry-run.
+			if !dry {
+				if e := toolchain.EnsureGo(); e != nil {
+					ui.Warn("Go: %v", e)
+				}
+				if e := toolchain.EnsureNode(); e != nil {
+					ui.Warn("Node: %v", e)
+				}
+			}
 
 			frontend, err := resolveFrontend(cmd)
 			if err != nil {

@@ -84,6 +84,7 @@ func init() {
 	registerMCP(rootCmd)
 	registerInfra(rootCmd)
 	registerStubPublish(rootCmd)
+	registerDoctor(rootCmd)
 }
 
 // loadProject loads the nearest togo.yaml relative to cwd. Commands that operate

@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/togo-framework/cli/internal/config"
+	"github.com/togo-framework/cli/internal/toolchain"
 	"github.com/togo-framework/cli/internal/ui"
 )
 
@@ -118,6 +119,9 @@ func runDev(proj *config.Project, opts devOptions) error {
 
 	// Backend
 	if !opts.webOnly {
+		if e := toolchain.EnsureGo(); e != nil {
+			ui.Warn("Go: %v", e)
+		}
 		if err := ensureModules(proj.Root); err != nil {
 			return err
 		}
@@ -134,6 +138,9 @@ func runDev(proj *config.Project, opts devOptions) error {
 	if !opts.apiOnly {
 		webDir := filepath.Join(proj.Root, proj.Frontend.Dir)
 		if fileExists(filepath.Join(webDir, "package.json")) {
+			if e := toolchain.EnsureNode(); e != nil {
+				ui.Warn("Node: %v", e)
+			}
 			pm := detectPM(webDir)
 			if err := ensureNodeModules(webDir, pm); err != nil {
 				if err == errSkipWeb {
