@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -42,9 +43,13 @@ func registerNew(root *cobra.Command) {
 			if err != nil {
 				return err
 			}
+			database, err := resolveDatabase(cmd)
+			if err != nil {
+				return err
+			}
 			selected := resolveSelection(cmd)
 
-			opts := scaffold.Options{App: name, Module: module, Dir: dir, Force: force, DryRun: dry, Frontend: frontend}
+			opts := scaffold.Options{App: name, Module: module, Dir: dir, Force: force, DryRun: dry, Frontend: frontend, DB: database}
 			// Refuse to scaffold over a non-empty directory: overlaying onto leftover
 			// files (e.g. an incomplete `rm`) silently skips them and produces a broken
 			// mix of old + new code. --force overrides.
@@ -64,6 +69,7 @@ func registerNew(root *cobra.Command) {
 			}
 			ui.Success("Created togo project %q (%d files)", name, created)
 			ui.Step("frontend: %s", frontend)
+			ui.Step("database: %s", database)
 
 			// Register feature providers (cache/queue/…) via blank-imports.
 			for _, f := range selected {
@@ -103,6 +109,9 @@ func registerNew(root *cobra.Command) {
 				}
 			}
 
+			// Provision the DB stack for the docker-backed databases ("up it for him").
+			provisionDatabase(database, target, name)
+
 			ui.Step("cd %s", name)
 			ui.Step("togo make:resource Post title:string body:text:nullable")
 			ui.Step("togo generate && togo migrate && togo serve")
@@ -113,6 +122,7 @@ func registerNew(root *cobra.Command) {
 	cmd.Flags().String("dir", "", "target directory (default: ./<app>)")
 	cmd.Flags().String("features", "", "comma-separated features (cache,queue,storage,realtime,i18n); default: all")
 	cmd.Flags().String("frontend", "tanstack", "web frontend: tanstack (default) | nextjs")
+	cmd.Flags().String("db", "sqlite", "database stack: sqlite (default) | postgres | togo-postgres | supabase | mysql | mongodb")
 	cmd.Flags().Bool("skip-tidy", false, "do not run `go mod tidy` after scaffolding")
 	root.AddCommand(cmd)
 }
@@ -179,6 +189,61 @@ func resolveFrontend(cmd *cobra.Command) (string, error) {
 		return ui.Select("Choose a frontend stack", frontendOptions()), nil
 	}
 	return "tanstack", nil
+}
+
+// dbStacks is the set of databases `togo new` can wire (driver + DSN + compose).
+var dbStacks = []string{"sqlite", "postgres", "togo-postgres", "supabase", "mysql", "mongodb"}
+
+// dbOptions lists the database stacks for the interactive picker.
+func dbOptions() []ui.Option {
+	return []ui.Option{
+		{Value: "sqlite", Label: "SQLite", Hint: "default · embedded file DB, no docker", Default: true},
+		{Value: "postgres", Label: "PostgreSQL", Hint: "postgres:16 via docker", Default: false},
+		{Value: "togo-postgres", Label: "togo-postgres", Hint: "batteries-included Supabase build — pgvector/pg_search/duckdb/cron/River/NATS", Default: false},
+		{Value: "supabase", Label: "Supabase", Hint: "postgres + GoTrue + Storage + Studio (docker)", Default: false},
+		{Value: "mysql", Label: "MySQL", Hint: "mysql:8 via docker", Default: false},
+		{Value: "mongodb", Label: "MongoDB", Hint: "mongo (app-level client; not the SQL ORM)", Default: false},
+	}
+}
+
+// resolveDatabase picks the database stack. Precedence: explicit --db flag →
+// interactive single-select → sqlite (non-interactive default).
+func resolveDatabase(cmd *cobra.Command) (string, error) {
+	if cmd.Flags().Changed("db") {
+		v := mustString(cmd, "db")
+		if !contains(dbStacks, v) {
+			return "", fmt.Errorf("invalid --db %q (allowed: %s)", v, strings.Join(dbStacks, ", "))
+		}
+		return v, nil
+	}
+	if isInteractive() {
+		return ui.Select("Choose a database stack", dbOptions()), nil
+	}
+	return "sqlite", nil
+}
+
+// provisionDatabase brings up the docker stack for docker-backed databases.
+// sqlite needs nothing. For the rest it prints the up command and, when docker is
+// present and stdin is a TTY, offers to run `docker compose up -d` now.
+func provisionDatabase(database, target, name string) {
+	if database == "sqlite" || database == "" {
+		return
+	}
+	ui.Step("cd %s && docker compose up -d   # start the %s stack", name, database)
+	if !isInteractive() || !has("docker") {
+		return
+	}
+	if !ui.Confirm(fmt.Sprintf("Start the %s docker stack now?", database), true) {
+		return
+	}
+	c := exec.Command("docker", "compose", "up", "-d")
+	c.Dir = target
+	c.Stdout, c.Stderr = os.Stdout, os.Stderr
+	if err := c.Run(); err != nil {
+		ui.Warn("docker compose up failed: %v (run it manually in %s)", err, name)
+		return
+	}
+	ui.Success("%s stack is up (docker compose)", database)
 }
 
 func parseFeatures(raw string) []string {

@@ -16,7 +16,35 @@ func registerDB(root *cobra.Command) {
 		appCmd("seed", "Seed the database", []string{"run", "./cmd/seed"}),
 		dbCmd("migrate:diff", "Generate an Atlas migration (advanced)", []string{"migrate", "diff", "--env", "local"}),
 		dbCmd("migrate:status", "Show Atlas migration status (advanced)", []string{"migrate", "status", "--env", "local"}),
+		composeCmd("db:up", "Start the project's database stack (docker compose up -d)", []string{"up", "-d"}),
+		composeCmd("db:down", "Stop the project's database stack (docker compose down)", []string{"down"}),
 	)
+}
+
+// composeCmd builds a command that runs docker compose in the project root —
+// brings the chosen DB stack (postgres / togo-postgres / supabase / mysql / mongodb)
+// up or down. SQLite needs no stack.
+func composeCmd(name, short string, composeArgs []string) *cobra.Command {
+	return &cobra.Command{
+		Use:     name,
+		Short:   short,
+		GroupID: groupDB,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			proj, err := loadProject(cmd)
+			if err != nil {
+				return err
+			}
+			if _, err := exec.LookPath("docker"); err != nil {
+				ui.Warn("docker not found on PATH — install Docker to manage the database stack")
+				return nil
+			}
+			if _, err := os.Stat(proj.Root + "/docker-compose.yml"); err != nil {
+				ui.Warn("no docker-compose.yml — this project uses SQLite (no stack to manage)")
+				return nil
+			}
+			return shellTool(proj, "docker", append([]string{"compose"}, append(composeArgs, args...)...), "https://docs.docker.com/get-docker/")
+		},
+	}
 }
 
 // dbCmd builds a command that shells out to the Atlas binary.

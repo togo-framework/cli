@@ -22,6 +22,7 @@ type Options struct {
 	Force    bool
 	DryRun   bool
 	Frontend string // "tanstack" (default) | "nextjs"
+	DB       string // "sqlite" (default) | postgres | togo-postgres | supabase | mysql | mongodb
 }
 
 // Resolved is Options with defaults applied.
@@ -41,6 +42,9 @@ func (o Options) Resolve() Resolved {
 	if r.Frontend == "" {
 		r.Frontend = "tanstack"
 	}
+	if r.DB == "" {
+		r.DB = "sqlite"
+	}
 	return r
 }
 
@@ -49,13 +53,35 @@ type data struct {
 	App       string
 	AppPascal string
 	Module    string
+	DB        string // chosen stack id (sqlite | postgres | togo-postgres | supabase | mysql | mongodb)
+	DBDriver  string // database/sql driver name (DB_DRIVER): sqlite | pgx | mysql | mongodb
+	DBURL     string // DATABASE_URL for the chosen stack
+}
+
+// dbConfig maps a database stack to its DB_DRIVER name + DATABASE_URL.
+func dbConfig(db, app string) (driver, url string) {
+	switch db {
+	case "postgres", "togo-postgres", "supabase":
+		dbName := app
+		if db == "supabase" {
+			dbName = "postgres"
+		}
+		return "pgx", "postgres://postgres:postgres@localhost:5432/" + dbName + "?sslmode=disable"
+	case "mysql":
+		return "mysql", "root:root@tcp(localhost:3306)/" + app + "?parseTime=true"
+	case "mongodb":
+		return "mongodb", "mongodb://root:root@localhost:27017/" + app + "?authSource=admin"
+	default: // sqlite
+		return "sqlite", "file:./togo.db?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)&_time_format=sqlite"
+	}
 }
 
 // New renders the project template into the target directory and returns the
 // number of files written (or that would be written in dry-run).
 func New(opts Options) (int, error) {
 	r := opts.Resolve()
-	d := data{App: r.App, AppPascal: generator.Pascal(r.App), Module: r.Module}
+	driver, url := dbConfig(r.DB, r.App)
+	d := data{App: r.App, AppPascal: generator.Pascal(r.App), Module: r.Module, DB: r.DB, DBDriver: driver, DBURL: url}
 	src := createtogoapp.FS()
 
 	count := 0
