@@ -35,26 +35,60 @@ type pluginManifest struct {
 
 func registerPlugin(root *cobra.Command) {
 	install := &cobra.Command{
-		Use:     "install <owner/repo | claude>",
-		Short:   "Install a togo plugin, or the togo Claude Code plugin (`togo install claude`)",
-		Long: `Install a togo plugin from a GitHub repository.
+		Use:     "install <owner/repo | agent:<name> | skill:<name> | claude>",
+		Short:   "Install a togo plugin, agent, or skill (or the Claude Code plugin)",
+		Long: `Install from the togo marketplace — plugins, agents, and skills install the same way.
 
-Use "togo install claude" to install the togo Claude Code plugin
-(` + claudeMarketplace + `) — its agents, commands, rules and hooks, with the
-togo MCP auto-connected — so Claude Code can scaffold and drive togo apps.`,
+  togo install <owner>/<repo>   a togo plugin (Go capability) from GitHub
+  togo install agent:<name>     a togo agent  → .claude/agents/<name>.md
+  togo install skill:<name>     a togo skill  → .claude/commands/<name>.md
+  togo install <name>           bare name: auto-detects an agent/skill, else a plugin
+  togo install claude           the togo Claude Code plugin (` + claudeMarketplace + `)
+  togo install --list           list installable agents, skills, and plugins
+
+Agents and skills are sourced from the togo Claude Code plugin and dropped into
+this project's .claude/ so Claude Code picks them up immediately.`,
 		GroupID: groupPlugin,
-		Args:    cobra.ExactArgs(1),
+		Args:    cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if t := strings.ToLower(args[0]); t == "claude" || t == "claude-code" {
+			if listFlag, _ := cmd.Flags().GetBool("list"); listFlag {
+				return listInstallable()
+			}
+			if len(args) == 0 {
+				return cmd.Help()
+			}
+			arg := args[0]
+			if t := strings.ToLower(arg); t == "claude" || t == "claude-code" {
 				return installClaudePlugin()
 			}
-			proj, err := loadProject(cmd)
-			if err != nil {
-				return err
+			// agent:<name> / skill:<name>
+			if kind, name, ok := splitAssetRef(arg); ok {
+				proj, err := loadProject(cmd)
+				if err != nil {
+					return err
+				}
+				return installAsset(proj, kind, name)
 			}
-			return installPlugin(proj, args[0])
+			// <owner>/<repo> → Go plugin
+			if strings.Contains(arg, "/") {
+				proj, err := loadProject(cmd)
+				if err != nil {
+					return err
+				}
+				return installPlugin(proj, arg)
+			}
+			// bare name: auto-detect an agent/skill, else explain.
+			if kind, ok := resolveBareAsset(arg); ok {
+				proj, err := loadProject(cmd)
+				if err != nil {
+					return err
+				}
+				return installAsset(proj, kind, arg)
+			}
+			return fmt.Errorf("%q is not a known agent/skill and isn't an <owner>/<repo> plugin\n  try:  togo install --list   ·   togo install <owner>/<repo>   ·   togo install agent:%s", arg, arg)
 		},
 	}
+	install.Flags().Bool("list", false, "List installable agents, skills, and plugins")
 
 	list := &cobra.Command{
 		Use:     "plugin:list",
