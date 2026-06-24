@@ -26,6 +26,7 @@ type Project struct {
 	Auth     Auth           `yaml:"auth"`
 	Plugins  []string       `yaml:"plugins"`
 	Frontend Frontend       `yaml:"frontend"`
+	Deploy   Deploy         `yaml:"deploy"`
 	Extra    map[string]any `yaml:",inline"`
 
 	// Root is the absolute directory containing togo.yaml (not serialized).
@@ -54,6 +55,42 @@ type Auth struct {
 // Frontend configures the Next.js app location.
 type Frontend struct {
 	Dir string `yaml:"dir"`
+}
+
+// Deploy configures `togo deploy` — fast push-and-build deploy to a server.
+// It accepts a single inline target and/or named environments under `targets`.
+//
+//	deploy:
+//	  host: 152.53.136.52      # single inline target
+//	  user: root
+//	  path: /opt/myapp
+//	  restart: systemctl restart myapp
+//	  # …or multiple environments:
+//	  default: production
+//	  targets:
+//	    production: { host: …, user: …, path: …, restart: … }
+//	    staging:    { host: …, user: …, path: …, restart: … }
+type Deploy struct {
+	DeployTarget `yaml:",inline"`
+	Default      string                  `yaml:"default"`
+	Targets      map[string]DeployTarget `yaml:"targets"`
+}
+
+// DeployTarget is one server/environment for `togo deploy`. Env vars
+// TOGO_DEPLOY_HOST/USER/PATH/SSH_KEY override the resolved values at deploy time.
+type DeployTarget struct {
+	Host        string `yaml:"host"`
+	User        string `yaml:"user"`
+	Path        string `yaml:"path"`
+	Port        int    `yaml:"port"`
+	SSHKey      string `yaml:"ssh_key"`
+	Build       string `yaml:"build"`        // local build command; default = frontend build + `go build`
+	Artifact    string `yaml:"artifact"`     // file/dir to ship; default = the built binary
+	Restart     string `yaml:"restart"`      // remote command run after upload
+	RemoteBuild bool   `yaml:"remote_build"` // rsync source and build on the server
+	GOOS        string `yaml:"goos"`         // target OS for the binary (default linux)
+	GOARCH      string `yaml:"goarch"`       // target arch (default amd64)
+	Binary      string `yaml:"binary"`       // output binary name (default = project name)
 }
 
 // Load finds and parses togo.yaml. If path is empty it searches from the current

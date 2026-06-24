@@ -55,9 +55,10 @@ func registerInfra(root *cobra.Command) {
 
 	plan := terraformCmd("infra:plan", "Show the Terraform plan", "plan")
 	apply := terraformCmd("infra:apply", "Apply the Terraform plan", "apply", "-auto-approve")
-	deploy := terraformCmd("deploy", "Provision infra (Terraform) and ship the app", "apply", "-auto-approve")
+	// `togo deploy` is the fast push-and-build deploy (cmd/deploy.go). Terraform
+	// provisioning lives under infra:apply.
 
-	root.AddCommand(initCmd, plan, apply, deploy)
+	root.AddCommand(initCmd, plan, apply)
 }
 
 func infraInit(proj *config.Project, provider, region string) error {

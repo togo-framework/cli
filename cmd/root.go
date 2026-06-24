@@ -83,6 +83,7 @@ func init() {
 	registerPlugin(rootCmd)
 	registerMCP(rootCmd)
 	registerInfra(rootCmd)
+	registerDeploy(rootCmd)
 	registerStubPublish(rootCmd)
 	registerDoctor(rootCmd)
 }
