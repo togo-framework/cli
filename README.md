@@ -4,6 +4,11 @@ The `togo` command — a Laravel-artisan-like CLI for the [togo](https://github.
 
 ## Install
 
+**npm** (downloads the prebuilt binary for your platform):
+```bash
+npm install -g @togo-framework/cli
+```
+
 **Linux / macOS**
 ```bash
 curl -fsSL https://raw.githubusercontent.com/togo-framework/cli/main/install.sh | sh
