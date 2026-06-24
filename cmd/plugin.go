@@ -35,11 +35,19 @@ type pluginManifest struct {
 
 func registerPlugin(root *cobra.Command) {
 	install := &cobra.Command{
-		Use:     "install <owner/repo>",
-		Short:   "Install a togo plugin from a GitHub repository",
+		Use:     "install <owner/repo | claude>",
+		Short:   "Install a togo plugin, or the togo Claude Code plugin (`togo install claude`)",
+		Long: `Install a togo plugin from a GitHub repository.
+
+Use "togo install claude" to install the togo Claude Code plugin
+(` + claudeMarketplace + `) — its agents, commands, rules and hooks, with the
+togo MCP auto-connected — so Claude Code can scaffold and drive togo apps.`,
 		GroupID: groupPlugin,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if t := strings.ToLower(args[0]); t == "claude" || t == "claude-code" {
+				return installClaudePlugin()
+			}
 			proj, err := loadProject(cmd)
 			if err != nil {
 				return err
@@ -70,6 +78,39 @@ func registerPlugin(root *cobra.Command) {
 	}
 
 	root.AddCommand(install, list)
+}
+
+// claudeMarketplace is the GitHub repo hosting the togo Claude Code plugin + marketplace.
+const claudeMarketplace = "togo-framework/claude-togo"
+
+// installClaudePlugin installs the togo Claude Code plugin into the user's Claude
+// Code: it adds the claude-togo marketplace and installs the `togo` plugin (which
+// auto-connects the togo MCP). If the Claude Code CLI isn't on PATH, it prints the
+// in-session slash commands instead.
+func installClaudePlugin() error {
+	ui.Step("Installing the togo Claude Code plugin (%s)…", claudeMarketplace)
+	claude, err := exec.LookPath("claude")
+	if err != nil {
+		ui.Warn("Claude Code CLI not found on PATH.")
+		ui.Info("Install Claude Code (https://claude.com/claude-code), then run in a session:")
+		ui.Step("/plugin marketplace add %s", claudeMarketplace)
+		ui.Step("/plugin install togo@togo")
+		return nil
+	}
+	for _, a := range [][]string{
+		{"plugin", "marketplace", "add", claudeMarketplace},
+		{"plugin", "install", "togo@togo"},
+	} {
+		ui.Step("claude %s", strings.Join(a, " "))
+		c := exec.Command(claude, a...)
+		c.Stdout, c.Stderr, c.Stdin = os.Stdout, os.Stderr, os.Stdin
+		if err := c.Run(); err != nil {
+			return fmt.Errorf("claude %s: %w", strings.Join(a, " "), err)
+		}
+	}
+	ui.Success("togo Claude Code plugin installed — the togo MCP is auto-connected.")
+	ui.Info("Try: /togo:new · /togo:resource · /togo:serve")
+	return nil
 }
 
 func installPlugin(proj *config.Project, repo string) error {
