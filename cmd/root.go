@@ -81,6 +81,7 @@ func init() {
 	registerGenerate(rootCmd)
 	registerDB(rootCmd)
 	registerPlugin(rootCmd)
+	registerProvider(rootCmd)
 	registerMCP(rootCmd)
 	registerInfra(rootCmd)
 	registerDeploy(rootCmd)
