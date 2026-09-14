@@ -1,4 +1,4 @@
-<p align="center"><img src=".github/assets/togo-mark.svg" width="96" alt="togo"></p>
+<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/assets/togo-mark-dark.svg" /><img src=".github/assets/togo-mark.svg" alt="ToGO" width="96" /></picture></p>
 
 # togo CLI
 
