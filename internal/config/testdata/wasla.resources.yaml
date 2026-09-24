@@ -1,0 +1,483 @@
+# Managed by togo. Source of truth for generated registries.
+resources:
+    - name: CashHandover
+      table: cash_handovers
+      fields:
+        - name: driver_id
+          go: string
+          gql: String!
+          pg: text
+          "null": false
+        - name: expected_cents
+          go: int64
+          gql: Int!
+          pg: bigint
+          "null": false
+        - name: counted_cents
+          go: int64
+          gql: Int!
+          pg: bigint
+          "null": false
+        - name: difference_reason
+          go: string
+          gql: String
+          pg: text
+          "null": true
+        - name: status
+          go: string
+          gql: String!
+          pg: text
+          "null": false
+          enum: [pending, confirmed, reconciled, disputed]
+      controller: true
+    - name: Customer
+      table: customers
+      fields:
+        - name: phone
+          go: string
+          gql: String!
+          pg: text
+          "null": false
+        - name: name
+          go: string
+          gql: String!
+          pg: text
+          "null": false
+        - name: default_address
+          go: string
+          gql: String
+          pg: text
+          "null": true
+        - name: notes
+          go: string
+          gql: String
+          pg: text
+          "null": true
+      controller: true
+    - name: Driver
+      table: drivers
+      fields:
+        - name: name
+          go: string
+          gql: String!
+          pg: text
+          "null": false
+        - name: phone
+          go: string
+          gql: String!
+          pg: text
+          "null": false
+        - name: status
+          go: string
+          gql: String!
+          pg: text
+          "null": false
+          enum: [available, offered, delivering, offline, suspended]
+        - name: zone
+          go: string
+          gql: String!
+          pg: text
+          "null": false
+          relation: zones
+        - name: rating
+          go: float64
+          gql: Float!
+          pg: double precision
+          "null": false
+        - name: cash_in_hand_cents
+          go: int64
+          gql: Int!
+          pg: bigint
+          "null": false
+        - name: latitude
+          go: float64
+          gql: Float!
+          pg: double precision
+          "null": false
+        - name: longitude
+          go: float64
+          gql: Float!
+          pg: double precision
+          "null": false
+        - name: active_orders
+          go: int64
+          gql: Int!
+          pg: integer
+          "null": false
+        - name: last_seen_at
+          go: time.Time
+          gql: String
+          pg: timestamptz
+          "null": true
+        - name: heading
+          go: float64
+          gql: Float
+          pg: double precision
+          "null": true
+        - name: speed_kph
+          go: float64
+          gql: Float
+          pg: double precision
+          "null": true
+        - name: accuracy_m
+          go: float64
+          gql: Float
+          pg: double precision
+          "null": true
+      controller: true
+    - name: DispatchOffer
+      table: dispatch_offers
+      fields:
+        - name: order_id
+          go: string
+          gql: String!
+          pg: text
+          "null": false
+          relation: orders
+        - name: driver_id
+          go: string
+          gql: String!
+          pg: text
+          "null": false
+          relation: drivers
+        - name: zone
+          go: string
+          gql: String!
+          pg: text
+          "null": false
+        - name: pickup_latitude
+          go: float64
+          gql: Float!
+          pg: double precision
+          "null": false
+        - name: pickup_longitude
+          go: float64
+          gql: Float!
+          pg: double precision
+          "null": false
+        - name: status
+          go: string
+          gql: String!
+          pg: text
+          "null": false
+          enum: [offered, accepted, rejected, expired, cancelled]
+        - name: rank
+          go: int64
+          gql: Int!
+          pg: integer
+          "null": false
+        - name: score
+          go: float64
+          gql: Float!
+          pg: double precision
+          "null": false
+        - name: offered_at
+          go: time.Time
+          gql: String!
+          pg: timestamptz
+          "null": false
+        - name: expires_at
+          go: time.Time
+          gql: String!
+          pg: timestamptz
+          "null": false
+        - name: responded_at
+          go: time.Time
+          gql: String
+          pg: timestamptz
+          "null": true
+      controller: false
+    - name: Order
+      table: orders
+      fields:
+        - name: reference
+          go: string
+          gql: String!
+          pg: text
+          "null": false
+        - name: vendor_id
+          go: string
+          gql: String!
+          pg: text
+          "null": false
+          relation: vendors
+        - name: driver_id
+          go: string
+          gql: String
+          pg: text
+          "null": true
+          relation: drivers
+        - name: customer_id
+          go: string
+          gql: String
+          pg: text
+          "null": true
+          relation: customers
+        - name: customer_name
+          go: string
+          gql: String!
+          pg: text
+          "null": false
+        - name: customer_phone
+          go: string
+          gql: String!
+          pg: text
+          "null": false
+        - name: pickup_address
+          go: string
+          gql: String!
+          pg: text
+          "null": false
+        - name: dropoff_address
+          go: string
+          gql: String!
+          pg: text
+          "null": false
+        - name: payment_method
+          go: string
+          gql: String!
+          pg: text
+          "null": false
+          enum: [cash, card, prepaid]
+        - name: total_cents
+          go: int64
+          gql: Int!
+          pg: bigint
+          "null": false
+        - name: status
+          go: string
+          gql: String!
+          pg: text
+          "null": false
+          enum: [created, awaiting_dispatch, assigned, picked_up, delivered, cash_collected, handed_to_operator, settled, cancelled, refund_requested]
+      controller: true
+    - name: OrderEvent
+      table: order_events
+      fields:
+        - name: order_id
+          go: string
+          gql: String!
+          pg: text
+          "null": false
+          relation: orders
+        - name: from_status
+          go: string
+          gql: String
+          pg: text
+          "null": true
+        - name: to_status
+          go: string
+          gql: String!
+          pg: text
+          "null": false
+        - name: actor_role
+          go: string
+          gql: String!
+          pg: text
+          "null": false
+          enum: [admin, operations, vendor, driver]
+        - name: note
+          go: string
+          gql: String
+          pg: text
+          "null": true
+      controller: true
+    - name: Settlement
+      table: settlements
+      fields:
+        - name: vendor_id
+          go: string
+          gql: String!
+          pg: text
+          "null": false
+          relation: vendors
+        - name: period_start
+          go: time.Time
+          gql: String!
+          pg: timestamptz
+          "null": false
+        - name: period_end
+          go: time.Time
+          gql: String!
+          pg: timestamptz
+          "null": false
+        - name: gross_cents
+          go: int64
+          gql: Int!
+          pg: bigint
+          "null": false
+        - name: fees_cents
+          go: int64
+          gql: Int!
+          pg: bigint
+          "null": false
+        - name: net_cents
+          go: int64
+          gql: Int!
+          pg: bigint
+          "null": false
+        - name: status
+          go: string
+          gql: String!
+          pg: text
+          "null": false
+          enum: [draft, approved, paid, cancelled]
+      controller: true
+    - name: Vendor
+      table: vendors
+      fields:
+        - name: name
+          go: string
+          gql: String!
+          pg: text
+          "null": false
+        - name: contact_phone
+          go: string
+          gql: String!
+          pg: text
+          "null": false
+        - name: settlement_period
+          go: string
+          gql: String!
+          pg: text
+          "null": false
+        - name: balance_cents
+          go: int64
+          gql: Int!
+          pg: bigint
+          "null": false
+        - name: latitude
+          go: float64
+          gql: Float!
+          pg: double precision
+          "null": false
+        - name: longitude
+          go: float64
+          gql: Float!
+          pg: double precision
+          "null": false
+        - name: status
+          go: string
+          gql: String!
+          pg: text
+          "null": false
+          enum: [active, suspended, inactive]
+      controller: true
+    - name: Workflow
+      table: workflows
+      fields:
+        - name: name
+          go: string
+          gql: String!
+          pg: text
+          "null": false
+        - name: entity
+          go: string
+          gql: String!
+          pg: text
+          "null": false
+        - name: status
+          go: string
+          gql: String!
+          pg: text
+          "null": false
+          enum: [draft, active, archived]
+        - name: definition_json
+          go: string
+          gql: String!
+          pg: jsonb
+          "null": false
+      controller: true
+    - name: Zone
+      table: zones
+      fields:
+        - name: name
+          go: string
+          gql: String!
+          pg: text
+          "null": false
+        - name: boundary
+          go: string
+          gql: String!
+          pg: jsonb
+          "null": false
+        - name: status
+          go: string
+          gql: String!
+          pg: text
+          "null": false
+          enum: [active, inactive]
+      controller: true
+    - name: LedgerAccount
+      table: ledger_accounts
+      fields:
+        - name: code
+          go: string
+          gql: String!
+          pg: text
+          "null": false
+        - name: owner_type
+          go: string
+          gql: String!
+          pg: text
+          "null": false
+        - name: owner_id
+          go: string
+          gql: String
+          pg: text
+          "null": true
+        - name: currency
+          go: string
+          gql: String!
+          pg: text
+          "null": false
+      controller: false
+    - name: LedgerTransaction
+      table: ledger_transactions
+      fields:
+        - name: kind
+          go: string
+          gql: String!
+          pg: text
+          "null": false
+        - name: reference_type
+          go: string
+          gql: String!
+          pg: text
+          "null": false
+        - name: reference_id
+          go: string
+          gql: String!
+          pg: text
+          "null": false
+        - name: description
+          go: string
+          gql: String!
+          pg: text
+          "null": false
+      controller: false
+    - name: LedgerEntry
+      table: ledger_entries
+      fields:
+        - name: transaction_id
+          go: string
+          gql: String!
+          pg: text
+          "null": false
+        - name: account_id
+          go: string
+          gql: String!
+          pg: text
+          "null": false
+        - name: direction
+          go: string
+          gql: String!
+          pg: text
+          "null": false
+          enum: [debit, credit]
+        - name: amount_cents
+          go: int64
+          gql: Int!
+          pg: bigint
+          "null": false
+      controller: false

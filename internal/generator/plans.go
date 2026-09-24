@@ -120,12 +120,27 @@ func SinglePlan(verb, module string, r config.Resource) []FileOp {
 	return nil
 }
 
+// restAggregate wires only resources with a generated controller (the
+// template filters on .Controller).
 func restAggregate(module string, m *config.Manifest) FileOp {
 	return FileOp{Path: "internal/rest/registry.gen.go", Template: "registry/rest_registry.go.tmpl",
-		Data: RegistryData{Module: module, Resources: m.Resources}, Mode: Overwrite}
+		Data: RegistryData{Module: module, Resources: m.Sorted()}, Mode: Overwrite}
 }
 
+// seederAggregate wires only resources that have a generated seeder, so
+// hand-managed resources (`controller: false` or `seeder: false`) are skipped.
 func seederAggregate(module string, m *config.Manifest) FileOp {
 	return FileOp{Path: "internal/db/seeders/registry.gen.go", Template: "registry/seeder_registry.go.tmpl",
-		Data: RegistryData{Module: module, Resources: m.Resources}, Mode: Overwrite}
+		Data: RegistryData{Module: module, Resources: SeederResources(m)}, Mode: Overwrite}
+}
+
+// SeederResources returns the name-sorted resources that belong in the seeder registry.
+func SeederResources(m *config.Manifest) []config.Resource {
+	var out []config.Resource
+	for _, r := range m.Sorted() {
+		if r.HasSeeder() {
+			out = append(out, r)
+		}
+	}
+	return out
 }

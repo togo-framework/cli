@@ -39,8 +39,8 @@ type pluginManifest struct {
 
 func registerPlugin(root *cobra.Command) {
 	install := &cobra.Command{
-		Use:     "install <owner/repo | agent:<name> | skill:<name> | claude>",
-		Short:   "Install a togo plugin, agent, or skill (or the Claude Code plugin)",
+		Use:   "install <owner/repo | agent:<name> | skill:<name> | claude>",
+		Short: "Install a togo plugin, agent, or skill (or the Claude Code plugin)",
 		Long: `Install from the togo marketplace — plugins, agents, and skills install the same way.
 
   togo install <owner>/<repo>   a togo plugin (Go capability) from GitHub
@@ -301,18 +301,14 @@ func recordPluginInConfig(proj *config.Project, pkg string) {
 	if err != nil {
 		return
 	}
-	var doc map[string]any
-	if yaml.Unmarshal(data, &doc) != nil {
+	// Surgical edit: only the plugins list changes; key order, indentation,
+	// blank lines and comments in togo.yaml are preserved.
+	out, changed, err := config.AddPlugin(data, pkg)
+	if err != nil {
+		ui.Warn("could not record %s in %s: %v", pkg, config.ConfigFile, err)
 		return
 	}
-	existing, _ := doc["plugins"].([]any)
-	for _, e := range existing {
-		if s, ok := e.(string); ok && s == pkg {
-			return
-		}
-	}
-	doc["plugins"] = append(existing, pkg)
-	if out, err := yaml.Marshal(doc); err == nil {
+	if changed {
 		_ = os.WriteFile(path, out, 0o644)
 	}
 }
