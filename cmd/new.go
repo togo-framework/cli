@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -120,21 +121,16 @@ func registerNew(root *cobra.Command) {
 			}
 
 			// Install full plugins (auth backend + dev login + dashboard UI/layouts)
-			// so the app ships login/register/dashboard/admin out of the box.
-			if proj, err := config.Load(filepath.Join(target, "togo.yaml")); err == nil {
-				var installs []string
-				if contains(selected, "auth") {
-					installs = append(installs, "auth", "auth-dev") // auth-dev is dev-only (no-op in prod)
+			// so the app ships login/register/dashboard/admin out of the box. These
+			// are required by the selected stack: if one fails the scaffold cannot
+			// build or sign in, so `togo new` fails instead of reporting success.
+			if installs := requiredPlugins(selected, frontend); len(installs) > 0 {
+				proj, err := config.Load(filepath.Join(target, "togo.yaml"))
+				if err != nil {
+					return fmt.Errorf("load togo.yaml to install %s: %w", strings.Join(installs, ", "), err)
 				}
-				// The dashboard plugin injects a Next.js web app; only install it for the
-				// Next frontend. The TanStack template already ships its own dashboard.
-				if contains(selected, "dashboard") && frontend == "nextjs" {
-					installs = append(installs, "dashboard")
-				}
-				for _, p := range installs {
-					if err := installPlugin(proj, "togo-framework/"+p, force); err != nil {
-						ui.Warn("install %s: %v", p, err)
-					}
+				if err := installRequired(proj, installs, force); err != nil {
+					return fmt.Errorf("%w (the project in %s is incomplete)", err, target)
 				}
 			}
 			if len(selected) > 0 {
@@ -164,6 +160,35 @@ func registerNew(root *cobra.Command) {
 	cmd.Flags().String("db", "sqlite", "database stack: sqlite (default) | postgres | togo-postgres | supabase | mysql | mongodb")
 	cmd.Flags().Bool("skip-tidy", false, "do not run `go mod tidy` after scaffolding")
 	root.AddCommand(cmd)
+}
+
+// installPluginFn installs one plugin; tests replace it to simulate failures.
+var installPluginFn = installPlugin
+
+// requiredPlugins lists the plugins the selected stack cannot work without.
+func requiredPlugins(selected []string, frontend string) []string {
+	var installs []string
+	if contains(selected, "auth") {
+		installs = append(installs, "auth", "auth-dev") // auth-dev is dev-only (no-op in prod)
+	}
+	// The dashboard plugin injects a Next.js web app; only install it for the
+	// Next frontend. The TanStack template already ships its own dashboard.
+	if contains(selected, "dashboard") && frontend == "nextjs" {
+		installs = append(installs, "dashboard")
+	}
+	return installs
+}
+
+// installRequired installs every plugin and returns all failures joined, so one
+// run reports each broken install rather than only the first.
+func installRequired(proj *config.Project, plugins []string, force bool) error {
+	var errs []error
+	for _, p := range plugins {
+		if err := installPluginFn(proj, "togo-framework/"+p, force); err != nil {
+			errs = append(errs, fmt.Errorf("install required plugin %s: %w", p, err))
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // selectable lists everything `togo new` can include: feature providers + the
