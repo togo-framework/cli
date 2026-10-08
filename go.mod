@@ -6,7 +6,7 @@ require (
 	github.com/gertd/go-pluralize v0.2.1
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/pflag v1.0.5
-	github.com/togo-framework/create-togo-app v0.2.0
+	github.com/togo-framework/create-togo-app v0.2.1
 	golang.org/x/term v0.44.0
 	gopkg.in/yaml.v3 v3.0.1
 )
