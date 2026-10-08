@@ -133,6 +133,12 @@ func runNew(t *testing.T, target string, args ...string) error {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// `togo new` runs the toolchain check, which records PATH in ~/.togo/env and
+	// edits PATH in-process; keep both inside the test.
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("PATH", os.Getenv("PATH"))
 	t.Cleanup(func() {
 		rootCmd.SetArgs(nil)
 		newCmd.Flags().VisitAll(func(f *pflag.Flag) {
