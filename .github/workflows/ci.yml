@@ -16,3 +16,15 @@ jobs:
       - run: go build ./...
       - run: go vet ./...
       - run: go test ./...
+
+  npm:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+      - run: node --test npm/install.test.js

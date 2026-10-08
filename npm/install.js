@@ -16,14 +16,23 @@ const ARCH = { x64: "amd64", arm64: "arm64" }[process.arch];
 const binDir = path.join(__dirname, "bin");
 const binName = PLAT === "windows" ? "togo.exe" : "togo";
 
-if (!PLAT || !ARCH) {
-  console.error(`[togo] no prebuilt binary for ${process.platform}/${process.arch} — install from source: go install github.com/togo-framework/cli/cmd/togo@v${version}`);
-  process.exit(0);
-}
-
 const ext = PLAT === "windows" ? "zip" : "tar.gz";
 const asset = `togo_${PLAT}_${ARCH}.${ext}`;
 const url = `https://github.com/togo-framework/cli/releases/download/v${version}/${asset}`;
+
+// tarBin returns the tar that extracts the release archive. Windows 10+ ships
+// bsdtar in System32, which reads .zip; call it by absolute path, because a GNU
+// tar earlier in PATH (e.g. Git's, when npm's script-shell is Git Bash) can't
+// read zips and takes "C:\…" for a remote host:path.
+function tarBin(platform = process.platform, env = process.env) {
+  if (platform !== "win32") return "tar";
+  const root = env.SystemRoot || env.SYSTEMROOT || env.windir || "C:\\Windows";
+  return path.win32.join(root, "System32", "tar.exe");
+}
+
+function extract(archive, dir, name) {
+  execFileSync(tarBin(), ["-xf", archive, "-C", dir, name], { stdio: "ignore" });
+}
 
 function download(u, dest, redirects = 0) {
   return new Promise((resolve, reject) => {
@@ -41,13 +50,16 @@ function download(u, dest, redirects = 0) {
   });
 }
 
-(async () => {
+async function main() {
+  if (!PLAT || !ARCH) {
+    console.error(`[togo] no prebuilt binary for ${process.platform}/${process.arch} — install from source: go install github.com/togo-framework/cli/cmd/togo@v${version}`);
+    process.exit(0);
+  }
   fs.mkdirSync(binDir, { recursive: true });
   const archive = path.join(binDir, asset);
   try {
     await download(url, archive);
-    // System `tar` extracts both .tar.gz and .zip (Windows 10+ ships bsdtar).
-    execFileSync("tar", ["-xf", archive, "-C", binDir, binName], { stdio: "ignore" });
+    extract(archive, binDir, binName);
     fs.rmSync(archive, { force: true });
     if (PLAT !== "windows") fs.chmodSync(path.join(binDir, binName), 0o755);
     console.log(`[togo] installed ${binName} v${version}`);
@@ -62,4 +74,8 @@ function download(u, dest, redirects = 0) {
       console.error(`[togo] could not install automatically. Download manually: https://github.com/togo-framework/cli/releases/tag/v${version}`);
     }
   }
-})();
+}
+
+if (require.main === module) main();
+
+module.exports = { tarBin, extract };
