@@ -40,6 +40,7 @@ frontend. For local development with hot reload, use 'togo dev'.`,
 		},
 	}
 	addServeFlags(dev)
+	addNoEnvFileFlag(dev)
 	root.AddCommand(dev)
 
 	// `togo web` — frontend only (convenience alias for serve --web-only).
@@ -53,7 +54,7 @@ frontend. For local development with hot reload, use 'togo dev'.`,
 				return err
 			}
 			webPort, _ := cmd.Flags().GetString("web-port")
-			return runDev(proj, devOptions{webOnly: true, webPort: webPort})
+			return runDevFn(proj, devOptions{webOnly: true, webPort: webPort})
 		},
 	}
 	web.Flags().String("web-port", "3000", "frontend dev server port")
@@ -70,7 +71,8 @@ func addServeFlags(cmd *cobra.Command) {
 }
 
 // serveFromFlags builds devOptions from flags and runs. watch defaults from the
-// command (dev=on, serve=off unless --watch).
+// command (dev=on, serve=off unless --watch). Only dev gives the API the project
+// .env; serve keeps the plain process environment.
 func serveFromFlags(cmd *cobra.Command, devDefault bool) error {
 	proj, err := loadProject(cmd)
 	if err != nil {
@@ -85,11 +87,21 @@ func serveFromFlags(cmd *cobra.Command, devDefault bool) error {
 	if cmd.Flags().Changed("watch") {
 		watch, _ = cmd.Flags().GetBool("watch")
 	}
-	return runDev(proj, devOptions{
+	var env []string
+	if devDefault && !webOnly {
+		noEnvFile, _ := cmd.Flags().GetBool("no-env-file")
+		if env, err = localAppEnv(noEnvFile, proj.Root); err != nil {
+			return err
+		}
+	}
+	return runDevFn(proj, devOptions{
 		apiOnly: apiOnly, webOnly: webOnly, watch: watch,
-		addr: host + ":" + port, host: host, webPort: webPort,
+		addr: host + ":" + port, host: host, webPort: webPort, apiEnv: env,
 	})
 }
+
+// runDevFn is runDev; tests replace it to inspect the options.
+var runDevFn = runDev
 
 type devOptions struct {
 	apiOnly bool
@@ -98,6 +110,16 @@ type devOptions struct {
 	addr    string
 	host    string
 	webPort string
+	apiEnv  []string // API environment before ADDR; nil means os.Environ()
+}
+
+// apiEnv is the API service's environment.
+func apiEnv(opts devOptions) []string {
+	env := opts.apiEnv
+	if env == nil {
+		env = os.Environ()
+	}
+	return append(env[:len(env):len(env)], "ADDR="+opts.addr)
 }
 
 func runDev(proj *config.Project, opts devOptions) error {
@@ -130,7 +152,7 @@ func runDev(proj *config.Project, opts devOptions) error {
 			bin:  "go",
 			args: []string{"run", "./cmd/api"},
 			dir:  proj.Root,
-			env:  append(os.Environ(), "ADDR="+opts.addr),
+			env:  apiEnv(opts),
 		})
 	}
 

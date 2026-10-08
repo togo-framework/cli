@@ -64,8 +64,9 @@ func dbCmd(name, short string, atlasArgs []string) *cobra.Command {
 }
 
 // appCmd builds a command that shells to a generated Go entrypoint in the app.
+// The app gets the project .env under the shell environment (see localAppEnv).
 func appCmd(name, short string, goArgs []string) *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:     name,
 		Short:   short,
 		GroupID: groupDB,
@@ -74,12 +75,27 @@ func appCmd(name, short string, goArgs []string) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return shellTool(proj, "go", append(goArgs, args...), "")
+			noEnvFile, _ := cmd.Flags().GetBool("no-env-file")
+			env, err := localAppEnv(noEnvFile, proj.Root)
+			if err != nil {
+				return err
+			}
+			return shellToolEnv(proj, "go", append(goArgs, args...), "", env)
 		},
 	}
+	addNoEnvFileFlag(cmd)
+	return cmd
+}
+
+func addNoEnvFileFlag(cmd *cobra.Command) {
+	cmd.Flags().Bool("no-env-file", false, "don't load the project .env (the shell environment is used as is)")
 }
 
 func shellTool(proj *config.Project, bin string, args []string, hint string) error {
+	return shellToolEnv(proj, bin, args, hint, os.Environ())
+}
+
+func shellToolEnv(proj *config.Project, bin string, args []string, hint string, env []string) error {
 	if _, err := exec.LookPath(bin); err != nil {
 		ui.Warn("%s not found. %s", bin, hint)
 		return nil
@@ -87,6 +103,6 @@ func shellTool(proj *config.Project, bin string, args []string, hint string) err
 	c := exec.Command(bin, args...)
 	c.Dir = proj.Root
 	c.Stdin, c.Stdout, c.Stderr = os.Stdin, os.Stdout, os.Stderr
-	c.Env = os.Environ()
+	c.Env = env
 	return c.Run()
 }
