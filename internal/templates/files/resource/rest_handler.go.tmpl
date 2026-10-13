@@ -3,12 +3,14 @@ package rest
 
 import (
 	"context"
+	"errors"
 	"net/http"
 {{- if .NeedsTime}}
 	"time"
 {{- end}}
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/togo-framework/orm"
 	"github.com/togo-framework/validation"
 
 	"{{.Module}}/internal/app"
@@ -19,6 +21,11 @@ import (
 // Register{{.Resource.Name}}Routes mounts CRUD endpoints for {{.Resource.Table}}.
 // Queries use the driver-agnostic ORM; responses go through resources.Transform{{.Resource.Name}};
 // create/delete broadcast events ("{{snake .Resource.Name}}.created"/".deleted").
+//
+// Bodies follow the GraphQL input rules: a non-null field's key must be present
+// (0, false and "" are valid values); a nullable field may be omitted or null.
+// An id or value the database can't parse (orm.ErrInvalidInput, e.g. a malformed
+// uuid on Postgres) is a 404 for path ids and a 422 for body values.
 func Register{{.Resource.Name}}Routes(api huma.API, a *app.App) {
 	huma.Register(api, huma.Operation{
 		OperationID: "list-{{kebab (plural .Resource.Name)}}", Method: http.MethodGet, Path: "/api/{{.Resource.Table}}",
@@ -47,7 +54,7 @@ func Register{{.Resource.Name}}Routes(api huma.API, a *app.App) {
 		Body resources.{{.Resource.Name}}Response
 	}, error) {
 		row, err := models.{{plural .Resource.Name}}(a).Find(ctx, in.ID)
-		if err != nil {
+		if err != nil && !errors.Is(err, orm.ErrInvalidInput) {
 			return nil, huma.Error500InternalServerError("get failed", err)
 		}
 		if row == nil {
@@ -64,7 +71,7 @@ func Register{{.Resource.Name}}Routes(api huma.API, a *app.App) {
 	}, func(ctx context.Context, in *struct {
 		Body struct {
 {{- range .Resource.Fields}}
-			{{pascal .Name}} {{if .Null}}*{{end}}{{.Go}} `json:"{{.Name}}"{{if not .Null}} validate:"required"{{end}}`
+			{{pascal .Name}} {{if .Null}}*{{end}}{{.Go}} `json:"{{.Name}}"{{if .Null}} required:"false"{{end}}`
 {{- end}}
 		}
 	}) (*struct {
@@ -79,6 +86,9 @@ func Register{{.Resource.Name}}Routes(api huma.API, a *app.App) {
 			"{{.Name}}": in.Body.{{pascal .Name}},
 {{- end}}
 		})
+		if errors.Is(err, orm.ErrInvalidInput) {
+			return nil, huma.Error422UnprocessableEntity("invalid field value", err)
+		}
 		if err != nil {
 			return nil, huma.Error500InternalServerError("create failed", err)
 		}
@@ -95,17 +105,28 @@ func Register{{.Resource.Name}}Routes(api huma.API, a *app.App) {
 		ID   string `path:"id"`
 		Body struct {
 {{- range .Resource.Fields}}
-			{{pascal .Name}} {{if .Null}}*{{end}}{{.Go}} `json:"{{.Name}}"`
+			{{pascal .Name}} {{if .Null}}*{{end}}{{.Go}} `json:"{{.Name}}"{{if .Null}} required:"false"{{end}}`
 {{- end}}
 		}
 	}) (*struct {
 		Body resources.{{.Resource.Name}}Response
 	}, error) {
-		if err := models.{{plural .Resource.Name}}(a).Where("id", "=", in.ID).Update(ctx, map[string]any{
+		existing, err := models.{{plural .Resource.Name}}(a).Find(ctx, in.ID)
+		if err != nil && !errors.Is(err, orm.ErrInvalidInput) {
+			return nil, huma.Error500InternalServerError("update failed", err)
+		}
+		if existing == nil {
+			return nil, huma.Error404NotFound("{{lower .Resource.Name}} not found")
+		}
+		err = models.{{plural .Resource.Name}}(a).Where("id", "=", in.ID).Update(ctx, map[string]any{
 {{- range .Resource.Fields}}
 			"{{.Name}}": in.Body.{{pascal .Name}},
 {{- end}}
-		}); err != nil {
+		})
+		if errors.Is(err, orm.ErrInvalidInput) {
+			return nil, huma.Error422UnprocessableEntity("invalid field value", err)
+		}
+		if err != nil {
 			return nil, huma.Error500InternalServerError("update failed", err)
 		}
 		row, err := models.{{plural .Resource.Name}}(a).Find(ctx, in.ID)
@@ -124,7 +145,11 @@ func Register{{.Resource.Name}}Routes(api huma.API, a *app.App) {
 	}, func(ctx context.Context, in *struct {
 		ID string `path:"id"`
 	}) (*struct{}, error) {
-		if err := models.{{plural .Resource.Name}}(a).Where("id", "=", in.ID).Delete(ctx); err != nil {
+		err := models.{{plural .Resource.Name}}(a).Where("id", "=", in.ID).Delete(ctx)
+		if errors.Is(err, orm.ErrInvalidInput) {
+			return nil, huma.Error404NotFound("{{lower .Resource.Name}} not found")
+		}
+		if err != nil {
 			return nil, huma.Error500InternalServerError("delete failed", err)
 		}
 		a.Emit(ctx, "{{snake .Resource.Name}}.deleted", in.ID)

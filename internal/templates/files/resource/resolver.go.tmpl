@@ -3,14 +3,23 @@ package resolvers
 
 import (
 	"context"
+	"errors"
+
+	"github.com/togo-framework/orm"
+	"github.com/vektah/gqlparser/v2/gqlerror"
 
 	db "{{.Module}}/internal/db/gen"
 	graphgen "{{.Module}}/internal/graph/gen"
 	"{{.Module}}/internal/models"
 )
 
+// An id the database can't parse (orm.ErrInvalidInput) matches no row: null.
 func (r *queryResolver) {{.Resource.Name}}(ctx context.Context, id string) (*db.{{.Resource.Name}}, error) {
-	return models.{{plural .Resource.Name}}(r.App).Find(ctx, id)
+	row, err := models.{{plural .Resource.Name}}(r.App).Find(ctx, id)
+	if errors.Is(err, orm.ErrInvalidInput) {
+		return nil, nil
+	}
+	return row, err
 }
 
 func (r *queryResolver) {{plural .Resource.Name}}(ctx context.Context) ([]*db.{{.Resource.Name}}, error) {
@@ -31,6 +40,12 @@ func (r *mutationResolver) Create{{.Resource.Name}}(ctx context.Context, input g
 		"{{.Name}}": input.{{pascal .Name}},
 {{- end}}
 	})
+	if errors.Is(err, orm.ErrInvalidInput) {
+		return nil, &gqlerror.Error{
+			Message:    "invalid field value: " + err.Error(),
+			Extensions: map[string]any{"code": "BAD_USER_INPUT"},
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -39,7 +54,11 @@ func (r *mutationResolver) Create{{.Resource.Name}}(ctx context.Context, input g
 }
 
 func (r *mutationResolver) Delete{{.Resource.Name}}(ctx context.Context, id string) (bool, error) {
-	if err := models.{{plural .Resource.Name}}(r.App).Where("id", "=", id).Delete(ctx); err != nil {
+	err := models.{{plural .Resource.Name}}(r.App).Where("id", "=", id).Delete(ctx)
+	if errors.Is(err, orm.ErrInvalidInput) {
+		return false, nil // no row has that id
+	}
+	if err != nil {
 		return false, err
 	}
 	r.App.Emit(ctx, "{{snake .Resource.Name}}.deleted", id)

@@ -27,6 +27,7 @@ func FuncMap() template.FuncMap {
 		"inc":        func(i int) int { return i + 1 },
 		"add":        func(a, b int) int { return a + b },
 		"atlasType":  atlasType,
+		"atlasCol":   AtlasColumnType,
 		"tsType":     tsType,
 		"sample":     SampleValue,
 		"sqliteType": SQLiteType,

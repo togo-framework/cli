@@ -10,6 +10,9 @@ type ResourceData struct {
 	Dialect   string // SQL dialect of the project's database: sqlite | postgres | mysql
 	Resource  config.Resource
 	NeedsTime bool
+	// AtlasSchema is the Atlas schema the table.hcl fragment belongs to. Filled at
+	// render time from the project's db/atlas/schema/schema.hcl (see AtlasSchema).
+	AtlasSchema string
 }
 
 // RegistryData is the view model for regenerated aggregate registries.
@@ -65,8 +68,11 @@ var singleTargets = map[string]string{
 	"make:e2e":       "resource/e2e.spec.ts.tmpl",
 }
 
-// extraTargets are generated only on demand (make:test, make:e2e).
+// extraTargets are generated only on demand (make:test, make:e2e, make:migration).
+// make:migration writes the Atlas HCL for the project's driver; `togo migrate`
+// itself applies internal/db/schema/*.sql and doesn't need it.
 var extraTargets = []target{
+	{"resource/table.hcl.tmpl", func(s, p string) string { return "db/atlas/schema/" + s + ".hcl" }, CreateOnly},
 	{"resource/feature_test.go.tmpl", func(s, p string) string { return "internal/rest/" + s + "_feature_test.go" }, CreateOnly},
 	{"resource/e2e.spec.ts.tmpl", func(s, p string) string { return "web/e2e/" + s + ".spec.ts" }, CreateOnly},
 }

@@ -1,6 +1,9 @@
 package generator
 
 import (
+	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/togo-framework/cli/internal/config"
@@ -64,5 +67,60 @@ func MySQLType(f config.Field) string {
 		return "json"
 	default:
 		return "text"
+	}
+}
+
+// AtlasSchemaFile declares the Atlas schema every table.hcl fragment belongs to.
+const AtlasSchemaFile = "db/atlas/schema/schema.hcl"
+
+var atlasSchemaRe = regexp.MustCompile(`(?m)^\s*schema\s+"([^"]+)"`)
+
+// AtlasSchema is the schema table.hcl fragments reference. Atlas needs the HCL
+// schema to be the one the URL connects to: "public" on Postgres, "main" on
+// SQLite and the database name on MySQL. The project's schema.hcl is the source
+// of truth, so a renamed schema there carries over to new tables; without one,
+// it falls back to the dialect's default (the app directory name for MySQL,
+// which `togo new` uses as the database name).
+func AtlasSchema(root, dialect string) string {
+	if root != "" {
+		if b, err := os.ReadFile(filepath.Join(root, AtlasSchemaFile)); err == nil {
+			if m := atlasSchemaRe.FindSubmatch(b); m != nil {
+				return string(m[1])
+			}
+		}
+	}
+	return DefaultAtlasSchema(root, dialect)
+}
+
+// DefaultAtlasSchema is the schema Atlas connects to for a fresh project.
+func DefaultAtlasSchema(root, dialect string) string {
+	switch dialect {
+	case DialectPostgres:
+		return "public"
+	case DialectMySQL:
+		if abs, err := filepath.Abs(root); err == nil && root != "" {
+			return filepath.Base(abs)
+		}
+		return "app"
+	default:
+		return "main"
+	}
+}
+
+// AtlasColumnType renders a field's column type as an Atlas HCL expression for
+// the dialect. Bare tokens are used where Atlas has one; parameterised types
+// (char(36), decimal(20,6), datetime(6)) go through sql("…").
+func AtlasColumnType(dialect string, f config.Field) string {
+	switch dialect {
+	case DialectPostgres:
+		return atlasType(f.PG)
+	case DialectMySQL:
+		t := MySQLType(f)
+		if strings.Contains(t, "(") {
+			return `sql("` + t + `")`
+		}
+		return t
+	default:
+		return SQLiteType(f)
 	}
 }
