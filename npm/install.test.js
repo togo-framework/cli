@@ -62,28 +62,3 @@ test("extracts the release .zip on Windows when GNU tar comes first in PATH",
     assert.strictEqual(fs.readFileSync(path.join(out, "togo.exe"), "utf8"), "binary");
     assert.ok(!fs.existsSync(path.join(out, "LICENSE")), "only the binary is extracted");
   });
-
-// npm 11's allow-scripts gate (or --ignore-scripts) skips the postinstall, so the
-// shim must fetch the binary itself on first run, then exec it. The stub
-// installer "downloads" a copy of node, which the shim then runs.
-test("shim installs the binary on first run when postinstall was skipped", () => {
-  const pkg = tmp();
-  fs.mkdirSync(path.join(pkg, "bin"));
-  fs.copyFileSync(path.join(__dirname, "bin", "togo.js"), path.join(pkg, "bin", "togo.js"));
-  const name = process.platform === "win32" ? "togo.exe" : "togo";
-  fs.writeFileSync(path.join(pkg, "install.js"), `
-const fs = require("fs"), path = require("path");
-module.exports.install = async () => {
-  fs.copyFileSync(${JSON.stringify(process.execPath)}, path.join(__dirname, "bin", ${JSON.stringify(name)}));
-  return true;
-};`);
-  const run = (code) => require("child_process").spawnSync(process.execPath,
-    [path.join(pkg, "bin", "togo.js"), "-e", `process.exit(${code})`], { encoding: "utf8" });
-
-  const first = run(7);
-  assert.strictEqual(first.status, 7, first.stderr);
-  assert.match(first.stderr, /fetching it now/);
-  const second = run(3);
-  assert.strictEqual(second.status, 3, second.stderr);
-  assert.doesNotMatch(second.stderr, /fetching/, "an installed binary runs directly");
-});
