@@ -121,8 +121,13 @@ func render(root string, op FileOp) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	data := op.Data
+	if d, ok := data.(ResourceData); ok && d.AtlasSchema == "" {
+		d.AtlasSchema = AtlasSchema(root, d.Dialect)
+		data = d
+	}
 	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, op.Data); err != nil {
+	if err := tmpl.Execute(&buf, data); err != nil {
 		return nil, err
 	}
 	out := buf.Bytes()
