@@ -7,6 +7,7 @@ import (
 // ResourceData is the view model for per-resource stubs.
 type ResourceData struct {
 	Module    string
+	Dialect   string // SQL dialect of the project's database: sqlite | postgres | mysql
 	Resource  config.Resource
 	NeedsTime bool
 }
@@ -75,9 +76,9 @@ var allSingleTargets = append(append(append(append([]target{}, modelTargets...),
 // TableName returns the conventional table name (plural snake_case) for a model.
 func TableName(name string) string { return inflector.Plural(Snake(name)) }
 
-func planFor(targets []target, module string, r config.Resource) []FileOp {
+func planFor(targets []target, module, dialect string, r config.Resource) []FileOp {
 	snake, plural := Snake(r.Name), TableName(r.Name)
-	data := ResourceData{Module: module, Resource: r, NeedsTime: NeedsTimeImport(r.Fields)}
+	data := ResourceData{Module: module, Dialect: SQLDialect(dialect), Resource: r, NeedsTime: NeedsTimeImport(r.Fields)}
 	ops := make([]FileOp, 0, len(targets))
 	for _, t := range targets {
 		ops = append(ops, FileOp{Path: t.path(snake, plural), Template: t.key, Data: data, Mode: t.mode})
@@ -85,36 +86,37 @@ func planFor(targets []target, module string, r config.Resource) []FileOp {
 	return ops
 }
 
-// ModelPlan: data layer + regenerated seeder registry.
-func ModelPlan(module string, r config.Resource, m *config.Manifest) []FileOp {
-	return append(planFor(modelTargets, module, r), seederAggregate(module, m))
+// ModelPlan: data layer + regenerated seeder registry. dialect is the project's
+// database driver (togo.yaml database.driver); it picks the SQL flavour.
+func ModelPlan(module, dialect string, r config.Resource, m *config.Manifest) []FileOp {
+	return append(planFor(modelTargets, module, dialect, r), seederAggregate(module, m))
 }
 
 // ControllerPlan: API layer + regenerated REST registry (controller-filtered).
 func ControllerPlan(module string, r config.Resource, m *config.Manifest) []FileOp {
-	return append(planFor(controllerTargets, module, r), restAggregate(module, m))
+	return append(planFor(controllerTargets, module, "", r), restAggregate(module, m))
 }
 
 // ViewPlan: frontend layer.
 func ViewPlan(module string, r config.Resource) []FileOp {
-	return planFor(viewTargets, module, r)
+	return planFor(viewTargets, module, "", r)
 }
 
 // ResourcePlan: model + controller + view (the all-in-one shortcut).
-func ResourcePlan(module string, r config.Resource, m *config.Manifest) []FileOp {
-	ops := planFor(modelTargets, module, r)
-	ops = append(ops, planFor(controllerTargets, module, r)...)
-	ops = append(ops, planFor(viewTargets, module, r)...)
+func ResourcePlan(module, dialect string, r config.Resource, m *config.Manifest) []FileOp {
+	ops := planFor(modelTargets, module, dialect, r)
+	ops = append(ops, planFor(controllerTargets, module, dialect, r)...)
+	ops = append(ops, planFor(viewTargets, module, dialect, r)...)
 	ops = append(ops, restAggregate(module, m), seederAggregate(module, m))
 	return ops
 }
 
 // SinglePlan returns the op for a single make:<kind> verb against one resource.
-func SinglePlan(verb, module string, r config.Resource) []FileOp {
+func SinglePlan(verb, module, dialect string, r config.Resource) []FileOp {
 	key := singleTargets[verb]
 	for _, t := range allSingleTargets {
 		if t.key == key {
-			return planFor([]target{t}, module, r)
+			return planFor([]target{t}, module, dialect, r)
 		}
 	}
 	return nil

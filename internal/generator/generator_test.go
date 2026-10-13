@@ -58,3 +58,17 @@ func TestParseFields(t *testing.T) {
 		t.Error("expected error for unknown type")
 	}
 }
+
+// Time fields use the Time scalar so gqlgen binds them to time.Time (a String
+// would need a hand-written field resolver and break `togo generate`).
+func TestTimeFieldsUseTimeScalar(t *testing.T) {
+	fields, err := ParseFields([]string{"at:time", "on:date?", "dt:datetime"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, want := range []string{"Time!", "Time", "Time!"} {
+		if fields[i].GQL != want {
+			t.Errorf("%s gql = %q, want %q", fields[i].Name, fields[i].GQL, want)
+		}
+	}
+}

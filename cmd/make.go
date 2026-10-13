@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -67,7 +69,7 @@ func makeModelCmd() *cobra.Command {
 			if _, err := m.Upsert(res, opts.Force); err != nil {
 				return err
 			}
-			results, err := generator.Execute(opts, generator.ModelPlan(proj.Module, res, m))
+			results, err := generator.Execute(opts, generator.ModelPlan(proj.Module, sqlDriver(proj), res, m))
 			if err != nil {
 				return err
 			}
@@ -181,7 +183,7 @@ func makeResourceCmd() *cobra.Command {
 			if _, err := m.Upsert(res, opts.Force); err != nil {
 				return err
 			}
-			results, err := generator.Execute(opts, generator.ResourcePlan(proj.Module, res, m))
+			results, err := generator.Execute(opts, generator.ResourcePlan(proj.Module, sqlDriver(proj), res, m))
 			if err != nil {
 				return err
 			}
@@ -239,7 +241,7 @@ func runSingle(cmd *cobra.Command, verb, name string) error {
 	if res == nil {
 		return fmt.Errorf("model %q not found — run `togo make:model %s` first", generator.Pascal(name), name)
 	}
-	results, err := generator.Execute(opts, generator.SinglePlan(verb, proj.Module, *res))
+	results, err := generator.Execute(opts, generator.SinglePlan(verb, proj.Module, sqlDriver(proj), *res))
 	if err != nil {
 		return err
 	}
@@ -259,7 +261,44 @@ func makeContext(cmd *cobra.Command) (*config.Project, *config.Manifest, generat
 	}
 	force, _ := cmd.Flags().GetBool("force")
 	dry, _ := cmd.Flags().GetBool("dry-run")
+	warnSQLCEngine(proj.Root, sqlDriver(proj))
 	return proj, m, generator.Options{Root: proj.Root, Force: force, DryRun: dry}, nil
+}
+
+// sqlDriver is the driver whose SQL dialect make:* writes: DB_DRIVER, then
+// togo.yaml database.driver, then sqlite (the kernel's default). A togo.yaml
+// without a driver keeps SQLite output rather than the config's postgres default.
+func sqlDriver(proj *config.Project) string {
+	if v := os.Getenv("DB_DRIVER"); v != "" {
+		return v
+	}
+	if proj.Database.DriverDefaulted {
+		return "sqlite"
+	}
+	return proj.Database.Driver
+}
+
+var sqlcEngine = regexp.MustCompile(`(?m)^\s*-?\s*engine:\s*"?([A-Za-z]+)"?`)
+
+// warnSQLCEngine warns when sqlc.yaml's engine cannot parse the SQL make:*
+// writes for driver (projects scaffolded before sqlc.yaml followed the driver).
+func warnSQLCEngine(root, driver string) {
+	b, err := os.ReadFile(filepath.Join(root, "sqlc.yaml"))
+	if err != nil {
+		return
+	}
+	match := sqlcEngine.FindSubmatch(b)
+	if match == nil {
+		return
+	}
+	want := map[string]string{
+		generator.DialectPostgres: "postgresql",
+		generator.DialectMySQL:    "mysql",
+		generator.DialectSQLite:   "sqlite",
+	}[generator.SQLDialect(driver)]
+	if got := string(match[1]); got != want {
+		ui.Warn("sqlc.yaml uses engine %q but database driver %q writes %s SQL: set engine: %q in sqlc.yaml (with matching overrides) before `togo generate`", got, driver, generator.SQLDialect(driver), want)
+	}
 }
 
 func modelName(cmd *cobra.Command, args []string) string {
