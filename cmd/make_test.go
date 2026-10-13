@@ -83,3 +83,56 @@ func mustWrite(t *testing.T, path string, data []byte) {
 		t.Fatal(err)
 	}
 }
+
+// make:* writes SQL for DB_DRIVER, then togo.yaml database.driver, then sqlite;
+// a togo.yaml without a driver keeps SQLite output instead of the config's
+// postgres default.
+func TestSQLDriverPrecedence(t *testing.T) {
+	for _, tc := range []struct {
+		name, yaml, env, want string
+	}{
+		{"no driver", "name: app\n", "", "sqlite"},
+		{"togo.yaml", "name: app\ndatabase:\n  driver: pgx\n", "", "pgx"},
+		{"DB_DRIVER wins", "name: app\ndatabase:\n  driver: pgx\n", "mysql", "mysql"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			mustWrite(t, filepath.Join(dir, config.ConfigFile), []byte(tc.yaml))
+			proj, err := config.Load(filepath.Join(dir, config.ConfigFile))
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("DB_DRIVER", tc.env)
+			if got := sqlDriver(proj); got != tc.want {
+				t.Errorf("sqlDriver = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// make:resource on a Postgres project writes PostgreSQL DDL and $n queries.
+func TestMakeResourcePostgres(t *testing.T) {
+	dir := t.TempDir()
+	mustWrite(t, filepath.Join(dir, config.ConfigFile), []byte("name: app\nmodule: example.com/app\ndatabase:\n  driver: pgx\n"))
+	t.Setenv("DB_DRIVER", "")
+	defer func() {
+		rootCmd.SetArgs(nil)
+		_ = rootCmd.PersistentFlags().Set("config", "")
+	}()
+	rootCmd.SetArgs([]string{"make:resource", "Post", "title:string", "body:text", "--config", filepath.Join(dir, config.ConfigFile)})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	schema := readFile(t, filepath.Join(dir, "internal", "db", "schema", "post.sql"))
+	for _, want := range []string{"id uuid PRIMARY KEY DEFAULT gen_random_uuid()", "title text NOT NULL", "created_at timestamptz NOT NULL DEFAULT now()"} {
+		if !strings.Contains(schema, want) {
+			t.Errorf("post.sql lacks %q:\n%s", want, schema)
+		}
+	}
+	if strings.Contains(schema, "datetime") || strings.Contains(schema, "randomblob") {
+		t.Errorf("post.sql has SQLite syntax:\n%s", schema)
+	}
+	if queries := readFile(t, filepath.Join(dir, "internal", "db", "queries", "post.sql")); !strings.Contains(queries, "WHERE id = $1") {
+		t.Errorf("queries do not use $n placeholders:\n%s", queries)
+	}
+}

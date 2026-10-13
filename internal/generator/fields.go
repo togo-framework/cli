@@ -8,7 +8,8 @@ import (
 )
 
 // typeMap maps a togo field type token to its Go, GraphQL (base, no !), and
-// Postgres representations.
+// Postgres representations. Time values use the Time scalar (bound to time.Time
+// in gqlgen.yml) so gqlgen binds them to the sqlc model without a resolver.
 var typeMap = map[string]struct {
 	Go  string
 	GQL string
@@ -25,9 +26,9 @@ var typeMap = map[string]struct {
 	"float64":  {"float64", "Float", "double precision"},
 	"decimal":  {"string", "String", "numeric"},
 	"uuid":     {"string", "ID", "uuid"},
-	"time":     {"time.Time", "String", "timestamptz"},
-	"datetime": {"time.Time", "String", "timestamptz"},
-	"date":     {"time.Time", "String", "date"},
+	"time":     {"time.Time", "Time", "timestamptz"},
+	"datetime": {"time.Time", "Time", "timestamptz"},
+	"date":     {"time.Time", "Time", "date"},
 	"json":     {"string", "String", "jsonb"},
 }
 

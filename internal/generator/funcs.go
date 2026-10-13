@@ -14,22 +14,23 @@ var inflector = pluralize.NewClient()
 // FuncMap is the shared template helper set available to every stub.
 func FuncMap() template.FuncMap {
 	return template.FuncMap{
-		"pascal":   Pascal,
-		"camel":    Camel,
-		"snake":    Snake,
-		"kebab":    Kebab,
-		"lower":    strings.ToLower,
-		"upper":    strings.ToUpper,
-		"plural":   inflector.Plural,
-		"singular": inflector.Singular,
-		"title":    strings.Title, //nolint:staticcheck // adequate for ASCII identifiers
-		"year":     func() int { return clockYear() },
-		"inc":       func(i int) int { return i + 1 },
-		"add":       func(a, b int) int { return a + b },
+		"pascal":     Pascal,
+		"camel":      Camel,
+		"snake":      Snake,
+		"kebab":      Kebab,
+		"lower":      strings.ToLower,
+		"upper":      strings.ToUpper,
+		"plural":     inflector.Plural,
+		"singular":   inflector.Singular,
+		"title":      strings.Title, //nolint:staticcheck // adequate for ASCII identifiers
+		"year":       func() int { return clockYear() },
+		"inc":        func(i int) int { return i + 1 },
+		"add":        func(a, b int) int { return a + b },
 		"atlasType":  atlasType,
 		"tsType":     tsType,
 		"sample":     SampleValue,
 		"sqliteType": SQLiteType,
+		"colType":    ColumnType,
 		"fakerFor":   FakerFor,
 		"has": func(list []string, v string) bool {
 			for _, x := range list {

@@ -41,6 +41,10 @@ type Project struct {
 type Database struct {
 	Driver string `yaml:"driver"`
 	URL    string `yaml:"url"`
+
+	// DriverDefaulted reports that togo.yaml set no driver and Driver holds the
+	// default (not serialized).
+	DriverDefaulted bool `yaml:"-"`
 }
 
 // API holds the mount points for the generated interfaces.
@@ -164,6 +168,7 @@ func Load(path string) (*Project, error) {
 func (p *Project) applyDefaults() {
 	if p.Database.Driver == "" {
 		p.Database.Driver = "postgres"
+		p.Database.DriverDefaulted = true
 	}
 	if p.API.GraphQL == "" {
 		p.API.GraphQL = "/graphql"
