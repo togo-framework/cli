@@ -11,6 +11,19 @@ The `togo` command — a Laravel-artisan-like CLI for the [togo](https://github.
 npm install -g @togo-framework/cli
 ```
 
+> **npm 11:** the binary is fetched by a `postinstall` script, and npm 11 gates install scripts behind
+> `allowScripts`. By default it only warns (`not yet covered by allowScripts`); with `strict-allow-scripts`
+> or `--ignore-scripts` the script is skipped and no binary is installed. Allow it explicitly:
+>
+> ```bash
+> npm install -g --allow-scripts=@togo-framework/cli @togo-framework/cli
+> # or once, for every future global install:
+> npm config set allow-scripts=@togo-framework/cli --location=user
+> ```
+>
+> Or skip npm: use `go install` (below) or grab a binary from
+> [GitHub releases](https://github.com/togo-framework/cli/releases).
+
 **Linux / macOS**
 ```bash
 curl -fsSL https://raw.githubusercontent.com/togo-framework/cli/main/install.sh | sh
