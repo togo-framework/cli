@@ -33,7 +33,7 @@ func RegisterMake(root *cobra.Command) {
 		"make:api":       "Generate the Huma REST handler for a model",
 		"make:seeder":    "Generate the seeder for a model",
 		"make:factory":   "Generate the faker factory for a model",
-		"make:page":      "Generate the Next.js page for a model",
+		"make:page":      "Generate the Next.js page for a model (Next.js frontend only)",
 		"make:test":      "Generate a Go feature test (PHPUnit-style) for a model",
 		"make:e2e":       "Generate a Playwright e2e spec (Dusk-style) for a model",
 	} {
@@ -133,7 +133,7 @@ func makeControllerCmd() *cobra.Command {
 func makeViewCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "make:view <Name>",
-		Short:   "Create Next.js views (page + hook + type) for a model",
+		Short:   "Create Next.js views (page + hook + type) for a model (Next.js frontend only)",
 		GroupID: groupMake,
 		Args:    cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -145,6 +145,10 @@ func makeViewCmd() *cobra.Command {
 			res := m.Find(generator.Pascal(name))
 			if res == nil {
 				return fmt.Errorf("model %q not found — run `togo make:model %s` first", generator.Pascal(name), name)
+			}
+			if tanStack(proj) {
+				skipViews(res.Table)
+				return nil
 			}
 			results, err := generator.Execute(opts, generator.ViewPlan(proj.Module, *res))
 			if err != nil {
@@ -183,7 +187,11 @@ func makeResourceCmd() *cobra.Command {
 			if _, err := m.Upsert(res, opts.Force); err != nil {
 				return err
 			}
-			results, err := generator.Execute(opts, generator.ResourcePlan(proj.Module, sqlDriver(proj), res, m))
+			plan := generator.ResourcePlan(proj.Module, sqlDriver(proj), res, m)
+			if tanStack(proj) {
+				plan = generator.WithoutViews(plan)
+			}
+			results, err := generator.Execute(opts, plan)
 			if err != nil {
 				return err
 			}
@@ -195,6 +203,9 @@ func makeResourceCmd() *cobra.Command {
 				}
 				ui.Success("Created resource %s", res.Name)
 				ui.Step("next: togo generate && togo migrate && togo serve")
+				if tanStack(proj) {
+					ui.Step("page: /admin/%s (the TanStack admin renders every resource)", res.Table)
+				}
 			}
 			return nil
 		},
@@ -241,12 +252,27 @@ func runSingle(cmd *cobra.Command, verb, name string) error {
 	if res == nil {
 		return fmt.Errorf("model %q not found — run `togo make:model %s` first", generator.Pascal(name), name)
 	}
-	results, err := generator.Execute(opts, generator.SinglePlan(verb, proj.Module, sqlDriver(proj), *res))
+	plan := generator.SinglePlan(verb, proj.Module, sqlDriver(proj), *res)
+	if tanStack(proj) && len(generator.WithoutViews(plan)) < len(plan) {
+		skipViews(res.Table)
+		return nil
+	}
+	results, err := generator.Execute(opts, plan)
 	if err != nil {
 		return err
 	}
 	generator.Report(results, opts.DryRun)
 	return nil
+}
+
+// tanStack reports whether the project's web app is the TanStack frontend, where
+// the Next.js view layer (page, hook, API type) does not apply.
+func tanStack(proj *config.Project) bool {
+	return generator.TanStackFrontend(proj.Root, proj.Frontend.Dir)
+}
+
+func skipViews(table string) {
+	ui.Info("TanStack frontend: no Next.js views written; the generic admin renders /admin/%s", table)
 }
 
 // makeContext loads the project, manifest, and shared options for a make command.

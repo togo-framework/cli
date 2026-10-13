@@ -3,7 +3,8 @@
  * Postinstall: download the prebuilt `togo` binary for this platform from the
  * matching GitHub release into ./bin. Falls back to `go install` if the download
  * fails (e.g. an unsupported platform but Go is present). Never hard-fails the
- * npm install — a missing binary is reported by bin/togo.js at run time.
+ * npm install. When npm skips this script (npm 11's allow-scripts gate,
+ * --ignore-scripts), bin/togo.js runs install() on first use instead.
  */
 const fs = require("fs");
 const path = require("path");
@@ -50,10 +51,11 @@ function download(u, dest, redirects = 0) {
   });
 }
 
-async function main() {
+// install fetches the binary into ./bin and resolves whether it is now there.
+async function install() {
   if (!PLAT || !ARCH) {
     console.error(`[togo] no prebuilt binary for ${process.platform}/${process.arch} — install from source: go install github.com/togo-framework/cli/cmd/togo@v${version}`);
-    process.exit(0);
+    return false;
   }
   fs.mkdirSync(binDir, { recursive: true });
   const archive = path.join(binDir, asset);
@@ -74,8 +76,9 @@ async function main() {
       console.error(`[togo] could not install automatically. Download manually: https://github.com/togo-framework/cli/releases/tag/v${version}`);
     }
   }
+  return fs.existsSync(path.join(binDir, binName));
 }
 
-if (require.main === module) main();
+if (require.main === module) install();
 
-module.exports = { tarBin, extract };
+module.exports = { tarBin, extract, install, binDir, binName };
