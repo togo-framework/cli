@@ -173,6 +173,8 @@ func runDeploy(proj *config.Project, env string, o deployOpts) error {
 		ui.Step("1. build   : %s", buildDesc(t, o))
 		if remoteBuild {
 			ui.Step("2. ship    : rsync ./ → %s, then build on server", remote)
+			ui.Step("   excludes: %s", strings.Join(remoteBuildExcludeNames(t), " "))
+			ui.Step("   (also skips files matched by .gitignore; deploy.include re-adds paths)")
 		} else {
 			ui.Step("2. ship    : rsync %s → %s", relTo(proj.Root, artifact), remote)
 		}
@@ -181,7 +183,7 @@ func runDeploy(proj *config.Project, env string, o deployOpts) error {
 	}
 
 	if remoteBuild {
-		if err := rsyncTo(proj.Root+string(os.PathSeparator), remote, t); err != nil {
+		if err := rsyncTo(proj.Root+string(os.PathSeparator), remote, t, remoteBuildFilters(t)); err != nil {
 			return err
 		}
 		build := t.Build
@@ -198,7 +200,7 @@ func runDeploy(proj *config.Project, env string, o deployOpts) error {
 				return err
 			}
 		}
-		if err := rsyncTo(artifact, remote, t); err != nil {
+		if err := rsyncTo(artifact, remote, t, nil); err != nil {
 			return err
 		}
 	}
@@ -262,16 +264,73 @@ func sshRun(t config.DeployTarget, remoteCmd string) error {
 	return c.Run()
 }
 
-func rsyncTo(src, remote string, t config.DeployTarget) error {
+// defaultRemoteBuildExcludes are never shipped by --remote-build: secrets, VCS
+// history, local databases and machine-local state. .env.example is re-included
+// (see remoteBuildFilters). Patterns use rsync syntax.
+var defaultRemoteBuildExcludes = []string{
+	".env",
+	".env.*",
+	".git/",
+	"*.db",
+	"*.db-wal",
+	"*.db-shm",
+	"*.db-journal",
+	"*.sqlite",
+	"*.sqlite3",
+	"*.sqlite-wal",
+	"*.sqlite-shm",
+	"node_modules/",
+	".togo/",
+}
+
+// remoteBuildFilters returns the rsync filter arguments for a --remote-build
+// upload. rsync applies the first matching rule, so the order matters:
+// deploy.include opt-ins, then .env.example, then the default excludes, then the
+// project's .gitignore (per directory).
+func remoteBuildFilters(t config.DeployTarget) []string {
+	var f []string
+	for _, p := range t.Include {
+		f = append(f, "--include="+p)
+	}
+	f = append(f, "--include=.env.example")
+	for _, p := range defaultRemoteBuildExcludes {
+		f = append(f, "--exclude="+p)
+	}
+	return append(f, "--filter=:- .gitignore")
+}
+
+// remoteBuildExcludeNames lists the excluded patterns for display (--dry-run).
+func remoteBuildExcludeNames(t config.DeployTarget) []string {
+	names := append([]string{}, defaultRemoteBuildExcludes...)
+	if len(t.Include) > 0 {
+		names = append(names, fmt.Sprintf("(except deploy.include: %s)", strings.Join(t.Include, ", ")))
+	}
+	return append(names, "(.env.example is kept)")
+}
+
+// rsyncArgs builds the rsync argument list.
+func rsyncArgs(src, remote, transport string, filters []string) []string {
+	args := []string{"-az", "-e", transport}
+	args = append(args, filters...)
+	return append(args, src, remote)
+}
+
+// rsyncTo uploads src to remote. filters (rsync --include/--exclude/--filter
+// args) are applied when set. scp cannot apply them, so with filters the scp
+// fallback is refused rather than uploading everything.
+func rsyncTo(src, remote string, t config.DeployTarget, filters []string) error {
 	if _, err := exec.LookPath("rsync"); err == nil {
 		transport := "ssh"
 		if extra := sshArgs(t); len(extra) > 0 {
 			transport = "ssh " + strings.Join(extra, " ")
 		}
 		ui.Step("rsync %s → %s", src, remote)
-		c := exec.Command("rsync", "-az", "-e", transport, src, remote)
+		c := exec.Command("rsync", rsyncArgs(src, remote, transport, filters)...)
 		c.Stdout, c.Stderr = os.Stdout, os.Stderr
 		return c.Run()
+	}
+	if len(filters) > 0 {
+		return fmt.Errorf("rsync not found on PATH: --remote-build needs rsync to skip .env, .git and local databases (scp would upload them); install rsync")
 	}
 	if _, err := exec.LookPath("scp"); err != nil {
 		return fmt.Errorf("neither rsync nor scp found on PATH")
