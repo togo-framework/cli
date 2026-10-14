@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	"github.com/togo-framework/cli/internal/config"
 	"github.com/togo-framework/cli/internal/scaffold"
@@ -346,8 +347,9 @@ func dirNotEmpty(path string) bool {
 	return err == nil && len(entries) > 0
 }
 
-// isInteractive reports whether stdin is a terminal (so prompting won't block CI).
+// isInteractive reports whether stdin is a real terminal (so prompting won't
+// block CI). /dev/null and NUL are character devices but not terminals, so this
+// uses term.IsTerminal, like internal/ui.
 func isInteractive() bool {
-	fi, err := os.Stdin.Stat()
-	return err == nil && (fi.Mode()&os.ModeCharDevice) != 0
+	return term.IsTerminal(int(os.Stdin.Fd()))
 }
