@@ -1,0 +1,11 @@
+# Keep every text file LF in the index and in working trees, whatever
+# core.autocrlf says (Git for Windows defaults it to true). npm packs files as
+# they are checked out, so CRLF here ends up in the published tarball (#9).
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.exe binary
