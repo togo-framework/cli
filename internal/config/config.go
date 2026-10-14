@@ -100,6 +100,7 @@ type DeployTarget struct {
 	Artifact    string         `yaml:"artifact"`     // file/dir to ship; default = the built binary
 	Restart     string         `yaml:"restart"`      // remote command run after upload
 	RemoteBuild bool           `yaml:"remote_build"` // rsync source and build on the server
+	Include     []string       `yaml:"include"`      // extra paths --remote-build may ship despite the default excludes (e.g. ".env.production.example")
 	GOOS        string         `yaml:"goos"`         // target OS for the binary (default linux)
 	GOARCH      string         `yaml:"goarch"`       // target arch (default amd64)
 	Binary      string         `yaml:"binary"`       // output binary name (default = project name)

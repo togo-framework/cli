@@ -92,6 +92,7 @@ deploy:
   path: /opt/myapp
   restart: systemctl restart myapp        # run over SSH after upload
   # optional: port · ssh_key · build · binary · goos · goarch · remote_build
+  # include: [".env.production.example"]   # extra paths --remote-build may ship
   # multi-environment instead of the inline target:
   # default: production
   # targets:
@@ -105,6 +106,12 @@ togo deploy staging          # a named target
 togo deploy --dry-run        # print the plan, change nothing
 togo deploy --remote-build   # rsync source and build on the server
 ```
+
+`--remote-build` ships the source tree but never `.env`, `.env.*` (except
+`.env.example`), `.git/`, local database files (`*.db`, `*.sqlite`, `-wal`/`-shm`),
+`node_modules/` or `.togo/`, and it honours `.gitignore`. Use `deploy.include` to
+opt a path back in. It requires `rsync` (the `scp` fallback is refused for remote
+builds because it cannot exclude files). `--dry-run` lists the exclusions.
 
 Env overrides: `TOGO_DEPLOY_HOST` / `_USER` / `_PATH` / `_SSH_KEY`.
 
